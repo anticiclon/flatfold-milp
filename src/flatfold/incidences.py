@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
-
+from collections import defaultdict
 from itertools import combinations
-from flatfold.geometry import se_solapan
-from flatfold.exact import aplica_isometria, reflexion, compon_isometrias
+from flatfold.io_fold import Kind
+from flatfold.geometry import se_solapan, atraviesa, caja, interseca_cajas, tiene_interior, recta_soporte, lado, solapan_colinealmente
+from flatfold.exact import aplica_isometria
+
 
 
 def pares_comparables(caras_plegadas):
@@ -22,6 +24,156 @@ def pares_comparables(caras_plegadas):
         if se_solapan(caras_plegadas[f], caras_plegadas[g]):
             pares.append((f, g))
     return pares
+
+
+def cruces(G, caras, plegadas, iso, dic_aristas, idx_exterior, pares=None):
+    """
+    Input:  G, caras, plegadas ({cara: polígono}), iso ({cara: isometría}),
+            dic_aristas ({(u,v): (f,g)}), idx_exterior,
+            pares (opcional, solo para comprobar el invariante)
+    Output: lista de (f, g, t) — la cara t atraviesa la arista que separa
+            las caras f y g.
+
+    Se traduce en la restricción x_ft = x_gt: una cara que cruza la línea de
+    una arista no puede colarse entre los dos trozos de papel unidos por ella.
+    Vale igual para pliegues (el doblez lo impide) y para aristas planas
+    (el papel sigue recto y las dos hojas tendrían que cruzarse).
+    """
+    restricciones = []
+
+    for (u, v), (f, g) in dic_aristas.items():
+        if f == idx_exterior or g == idx_exterior:
+            continue
+
+        # imagen plegada de la arista; da igual cuál de las dos caras se use,
+        # porque coinciden sobre ella (lo garantiza verifica_consistencia)
+        segmento = (aplica_isometria(iso[f], G.nodes[u]["coor"]),
+                    aplica_isometria(iso[f], G.nodes[v]["coor"]))
+
+        for t in plegadas:
+            if t == f or t == g:
+                continue
+            if atraviesa(segmento, plegadas[t]):
+                restricciones.append((f, g, t))
+                if pares is not None:
+                    assert (min(f, t), max(f, t)) in pares, (f, t)
+                    assert (min(g, t), max(g, t)) in pares, (g, t)
+
+    return restricciones
+
+
+
+
+
+
+
+
+def tripletas(caras_plegadas, pares):
+    """
+    Input:  {cara: polígono plegado} y la lista de pares comparables.
+    Output: lista de (f, g, h) con f < g < h cuyas tres imágenes tienen
+            un punto interior común.
+
+    Se traduce en la restricción de transitividad: si tres caras cubren el
+    mismo punto del plano, su orden debe ser total y no cíclico.
+
+    Solo se examinan las tripletas cuyos tres pares se solapan, es decir los
+    triángulos del grafo de solapamiento; en las demás falta al menos un
+    solapamiento y no puede haber punto común.
+    """
+    conjunto_pares = set(pares)
+    cajas = {f: caja(p) for f, p in caras_plegadas.items()}
+
+    resultado = []
+    for f, g, h in combinations(sorted(caras_plegadas), 3):
+        if ((f, g) not in conjunto_pares
+                or (f, h) not in conjunto_pares
+                or (g, h) not in conjunto_pares):
+            continue
+        if tiene_interior(interseca_cajas([cajas[f], cajas[g], cajas[h]])):
+            resultado.append((f, g, h))
+    return resultado
+
+
+
+
+
+def _lado_de_cara(key, poligono):
+    """Lado de la recta que ocupa una cara convexa apoyada en ella."""
+    for v in poligono:
+        s = lado(key, v)
+        if s != 0:
+            return s
+    raise ValueError("cara contenida en la recta")
+
+
+def colineales(G, caras, plegadas, iso, dic_aristas, idx_exterior):
+    """
+    Output: (taco_taco, taco_tortilla, tortilla_tortilla)
+
+    taco_taco:        listas de cuatro pares de caras; la restricción es que
+                      un número PAR de los cuatro literales valga 1.
+    taco_tortilla:    pares ((a,t1), (b,t1)); la restricción es la igualdad.
+    tortilla_tortilla: pares ((t1,u1), (t2,u2)); igualdad.
+    """
+    # --- agrupar las aristas interiores por recta soporte de su imagen ---
+    grupos = defaultdict(list)
+    for (u, v), (f, g) in dic_aristas.items():
+        if f == idx_exterior or g == idx_exterior:
+            continue
+        seg = (aplica_isometria(iso[f], G.nodes[u]["coor"]),
+               aplica_isometria(iso[f], G.nodes[v]["coor"]))
+        tipo = G[u][v]["tipo"]
+        grupos[recta_soporte(seg)].append((seg, tipo, f, g))
+
+    taco_taco, taco_tortilla, tortilla_tortilla = [], [], []
+
+    for key, aristas in grupos.items():
+        for i in range(len(aristas)):
+            for j in range(i + 1, len(aristas)):
+                seg1, tipo1, f1, g1 = aristas[i]
+                seg2, tipo2, f2, g2 = aristas[j]
+                if solapan_colinealmente(seg1, seg2) is None:
+                    continue
+
+                l1f, l1g = _lado_de_cara(key, plegadas[f1]), _lado_de_cara(key, plegadas[g1])
+                l2f, l2g = _lado_de_cara(key, plegadas[f2]), _lado_de_cara(key, plegadas[g2])
+
+                # invariante: pliegue -> mismo lado; plana -> lados opuestos
+                assert (l1f == l1g) == (tipo1 == Kind.CREASE)
+                assert (l2f == l2g) == (tipo2 == Kind.CREASE)
+
+                # --- taco - taco ---
+                if tipo1 == Kind.CREASE and tipo2 == Kind.CREASE:
+                    if l1f != l2f:
+                        continue                       # abren a lados opuestos
+                    if len({f1, g1, f2, g2}) < 4:
+                        continue                       # comparten cara
+                    taco_taco.append([(f1, f2), (g1, f2), (f1, g2), (g1, g2)])
+
+                # --- taco - tortilla ---
+                elif tipo1 == Kind.CREASE or tipo2 == Kind.CREASE:
+                    if tipo1 == Kind.CREASE:
+                        (a, b), lado_taco = (f1, g1), l1f
+                        t1 = f2 if l2f == lado_taco else g2
+                    else:
+                        (a, b), lado_taco = (f2, g2), l2f
+                        t1 = f1 if l1f == lado_taco else g1
+                    if t1 in (a, b):
+                        continue
+                    taco_tortilla.append(((a, t1), (b, t1)))
+
+                # --- tortilla - tortilla ---
+                else:
+                    t1, t2 = (f1, g1) if l1f > 0 else (g1, f1)
+                    u1, u2 = (f2, g2) if l2f > 0 else (g2, f2)
+                    if t1 == u1 or t2 == u2:
+                        continue
+                    tortilla_tortilla.append(((t1, u1), (t2, u2)))
+
+    return taco_taco, taco_tortilla, tortilla_tortilla
+
+
 
 
 
@@ -53,6 +205,9 @@ def main():
 
     for nombre in ["single_fold", "square", "map_1x3",
                    "waterbomb4", "waterbomb8"]:
+        print("=" * 60)
+        print(nombre)
+
         fi = read_fold(TOY / f"{nombre}.fold")
         G = crea_grafo_dirigido(fi)
         caras = caras_grafo(G)
@@ -62,44 +217,35 @@ def main():
         dic_aristas = aristas_caras(G, caras)
 
         if len(dual) == 0:
-            print(f"{nombre}: sin caras interiores conectadas")
+            print("  sin caras interiores conectadas")
             continue
 
         iso = plegar(G, dual, min(dual.nodes))
         plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
         pares = pares_comparables(plegadas)
+        trip = tripletas(plegadas, pares)
+        cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_exterior,
+                    set(pares))
+        tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas,
+                                 idx_exterior)
 
-        print("=" * 60)
-        print(f"{nombre}: {len(plegadas)} caras, {len(pares)} pares")
+        print(f"  caras: {len(plegadas)}   variables: {len(pares)}")
+        print(f"  tripletas:          {len(trip)}")
+        print(f"  cruces:             {len(cr)}")
+        print(f"  taco-taco:          {len(tt)}")
+        print(f"  taco-tortilla:      {len(tto)}")
+        print(f"  tortilla-tortilla:  {len(oo)}")
 
-        # --- lo que consume cruces ---
-        # G, caras, plegadas, iso, dic_aristas, idx_exterior
-        internas = [(a, f, g) for a, (f, g) in dic_aristas.items()
-                    if f != idx_exterior and g != idx_exterior]
-        print(f"  aristas interiores: {len(internas)}")
-        for (u, v), f, g in internas:
-            pu_f = aplica_isometria(iso[f], G.nodes[u]["coor"])
-            pu_g = aplica_isometria(iso[g], G.nodes[u]["coor"])
-            pv_f = aplica_isometria(iso[f], G.nodes[v]["coor"])
-            pv_g = aplica_isometria(iso[g], G.nodes[v]["coor"])
-            ok = (pu_f == pu_g and pv_f == pv_g)
-            print(f"    arista {(u,v)} caras {f},{g}  "
-                  f"desde {f}: {pu_f},{pv_f}   desde {g}: {pu_g},{pv_g}   "
-                  f"{'ok' if ok else '*** DISCREPA ***'}")
-            
-    if nombre == "map_1x3":
-        r = reflexion(G.nodes[2]["coor"], G.nodes[5]["coor"])
-        print("  iso[2]:", iso[2])
-        print("  iso[3]:", iso[3])
-        print("  compon(r, iso[2]):", compon_isometrias(r, iso[2]))
-        print("  compon(r, iso[3]):", compon_isometrias(r, iso[3]))
-
-
+        for cuatro in tt:
+            print(f"    paridad par sobre {cuatro}")
+        for p1, p2 in tto:
+            print(f"    igualdad {p1} = {p2}")
+        for p1, p2 in oo:
+            print(f"    igualdad {p1} = {p2}")
 
 
 if __name__ == "__main__":
     main()
-
 
 
 

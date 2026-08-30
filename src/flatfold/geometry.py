@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from fractions import Fraction
+import numpy as np
+Point   = tuple[int, int]
+LineKey = tuple[str, int]
 
 
 def es_convexa(poligono):
@@ -296,13 +299,89 @@ def atraviesa(segmento, poligono):
 
     return lo < hi
 
+def recta_soporte(segmento):
+    """
+    Input:  (p, q), los dos extremos de un segmento.
+    Output: (tipo, valor), la clave canónica de la recta que lo contiene:
+                ("H", a)  para  y = a
+                ("V", b)  para  x = b
+                ("D", c)  para  y - x = c      (pendiente +1)
+                ("A", d)  para  x + y = d      (pendiente -1)
+
+    Dos segmentos son colineales si y solo si tienen la misma clave. La
+    comparación es de tuplas, sin geometría de por medio.
+    """
+    (px, py), (qx, qy) = segmento
+    dx, dy = qx - px, qy - py
+
+    if dx == 0 and dy == 0:
+        raise ValueError(f"segmento degenerado: {segmento}")
+    if dy == 0:
+        return ("H", py)
+    if dx == 0:
+        return ("V", px)
+    if dy == dx:
+        return ("D", py - px)
+    if dy == -dx:
+        return ("A", px + py)
+    raise ValueError(f"pendiente no admisible: {segmento}")
 
 
 
 
+def lado(key: LineKey, p: Point) -> int:
+    """
+    Una recta parte el plano en dos mitades. side_of te dice en cuál de las 
+    dos está un punto, o si está justo encima.
+    
+    Cuál de los dos lados sale +1 es arbitrario. Lo único que importa es que 
+    sea consistente: el mismo lado siempre da el mismo signo. Nunca se va usar 
+    el valor absoluto ni a interpretar el signo geométricamente; solo se va a 
+    comparar signos entre sí.
+    """
+    tipo_pendiente = key[0]
+    valor = key[1]
+    if tipo_pendiente == "H":
+        # y - Y0
+        return np.sign(p[1] - valor)
+    elif tipo_pendiente == "V":
+        # x - X0
+        return np.sign(p[0] - valor)
+    elif tipo_pendiente == "D":
+        # (y - x) - Y0
+        return np.sign(p[1] - p[0] - valor)
+    elif tipo_pendiente == "A":
+        # (y + x) - Y0
+        return np.sign(p[1] + p[0] - valor)
+    raise ValueError(f"LineKey inválida: {key}")
 
 
 
+def parametro(key, punto):
+    """
+    Posición de un punto a lo largo de su recta, como un solo entero.
+
+    Se usa x, salvo en las verticales donde x es constante y no distingue
+    nada; ahí se usa y. El valor es monótono a lo largo de la recta, que es
+    lo único que hace falta para ordenar y comparar intervalos.
+    """
+    return punto[1] if key[0] == "V" else punto[0]
 
 
+def solapan_colinealmente(seg1, seg2):
+    """
+    Input:  dos segmentos.
+    Output: el tramo común como par de parámetros (lo, hi), o None.
 
+    Cierto solo si los dos están sobre la misma recta y comparten un tramo
+    de longitud positiva. Compartir un extremo no cuenta.
+    """
+    key = recta_soporte(seg1)
+    if key != recta_soporte(seg2):
+        return None
+
+    a1, b1 = sorted(parametro(key, p) for p in seg1)
+    a2, b2 = sorted(parametro(key, p) for p in seg2)
+
+    lo, hi = max(a1, a2), min(b1, b2)
+    return (lo, hi) if lo < hi else None

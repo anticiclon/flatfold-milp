@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import gurobipy as gb
 from collections import defaultdict
+from flatfold.pattern import aristas_caras
+from flatfold.incidences import tripletas, cruces, colineales
 
 
 
@@ -42,19 +44,53 @@ def literal(x, u, v):
     return 1 - x[v, u]
 
 
-def añade_restricciones(m, x, restricciones):
-    """
-    Input:  el modelo, las variables, y las listas de la etapa (5).
-    Output: nada; modifica el modelo.
+def añade_transitividad(m, x, tripletas):
+    """Tres caras sobre un mismo punto: su orden debe ser total, no cíclico."""
+    for f, g, h in tripletas:
+        s = literal(x, f, g) + literal(x, g, h) + literal(x, h, f)
+        m.addConstr(s >= 1)
+        m.addConstr(s <= 2)
 
-    PENDIENTE: la etapa (5) todavía no genera restricciones.
-    Cuando las genere, aquí van las cinco familias, cada una en su
-    propia función para poder activarlas por separado:
-        - transitividad sobre tripletas que cubren un punto común
-        - cruces: una cara que atraviesa la imagen de una arista
-        - tres familias de solapamientos colineales
+
+def añade_cruces(m, x, cruces):
+    """Una cara que cruza la línea de una arista no puede colarse entre
+    los dos trozos unidos por ella."""
+    for f, g, t in cruces:
+        m.addConstr(literal(x, f, t) == literal(x, g, t))
+
+
+def añade_taco_taco(m, x, taco_taco):
+    """Dos pliegues colineales que abren al mismo lado no pueden
+    entrelazarse: un número par de los cuatro literales vale 1."""
+    for cuatro in taco_taco:
+        k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=2)
+        m.addConstr(gb.quicksum(literal(x, u, v) for u, v in cuatro) == 2 * k)
+
+
+def añade_igualdades(m, x, pares_de_pares):
+    """Familias taco-tortilla y tortilla-tortilla: igualdad de dos literales."""
+    for (u1, v1), (u2, v2) in pares_de_pares:
+        m.addConstr(literal(x, u1, v1) == literal(x, u2, v2))
+
+
+
+
+def añade_restricciones(m, x, tripletas, cruces, taco_taco,
+                        taco_tortilla, tortilla_tortilla,
+                        con_transitividad=True, con_cruces=True,
+                        con_colineales=True):
     """
-    pass
+    Añade las cinco familias al modelo. Las banderas permiten activarlas
+    por separado, que es lo que hace falta para medir el efecto de cada una.
+    """
+    if con_transitividad:
+        añade_transitividad(m, x, tripletas)
+    if con_cruces:
+        añade_cruces(m, x, cruces)
+    if con_colineales:
+        añade_taco_taco(m, x, taco_taco)
+        añade_igualdades(m, x, taco_tortilla)
+        añade_igualdades(m, x, tortilla_tortilla)
     
 def resuelve(m, x, tiempo_limite=None, semilla=0, silencioso=True):
     """
@@ -159,36 +195,36 @@ def main():
         G = crea_grafo_dirigido(fi)
         caras = caras_grafo(G)
         _, exterior = caras_definitivas(G, caras)
-        dual = grafo_dual(G, caras, caras.index(exterior))
+        idx_ext = caras.index(exterior)
+        dual = grafo_dual(G, caras, idx_ext)
+        dic_aristas = aristas_caras(G, caras)
 
         if len(dual) == 0:
-            plegadas, pares = {}, []
-        else:
-            iso = plegar(G, dual, min(dual.nodes))
-            plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-            pares = pares_comparables(plegadas)
-
-        print(f"  caras interiores: {len(plegadas)}   variables: {len(pares)}")
-
-        # --- etapa 6 ---
-        m, x = construye_modelo(pares)
-        estado, valores = resuelve(m, x)
-
-        if valores is None:
-            print(f"  sin solución (estado {estado})")
+            print("  sin caras interiores")
             continue
 
-        print(f"  solución: {valores}")
-        print(f"  capas (de arriba abajo): {orden_de_capas(pares, valores)}")
+        iso = plegar(G, dual, min(dual.nodes))
+        plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+        pares = pares_comparables(plegadas)
+        trip = tripletas(plegadas, pares)
+        cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext)
+        tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
 
-        # --- recuento de estados ---
-        m2, x2 = construye_modelo(pares)
-        m2.Params.PoolSearchMode = 2
-        m2.Params.PoolSolutions = 1000
-        m2.Params.LogToConsole = 0
-        m2.optimize()
-        print(f"  órdenes de capas admitidos por el modelo: {m2.SolCount}")
+        print(f"  variables: {len(pares)}   tripletas: {len(trip)}   "
+              f"cruces: {len(cr)}   taco-taco: {len(tt)}")
 
+        # --- recuento con cada combinación de familias ---
+        for etiqueta, banderas in [
+                ("sin restricciones", dict(con_transitividad=False,
+                                           con_cruces=False,
+                                           con_colineales=False)),
+                ("+ transitividad",   dict(con_cruces=False,
+                                           con_colineales=False)),
+                ("+ cruces",          dict(con_colineales=False)),
+                ("todas",             dict())]:
+            m, x = construye_modelo(pares)
+            añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
+            print(f"    {etiqueta:20s}: {cuenta_soluciones(m)} estados")
 
 if __name__ == "__main__":
     main()
