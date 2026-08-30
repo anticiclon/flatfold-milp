@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from fractions import Fraction
 
 
 def es_convexa(poligono):
@@ -243,6 +244,57 @@ def se_solapan(poligono_f, poligono_g):
     inter = interseca_cajas([caja_f, caja_g])
     return tiene_interior(inter)
 
+
+
+
+def atraviesa(segmento, poligono):
+    """
+    Input:  segmento — (p, q), dos puntos
+            poligono — lista de vértices
+    Output: booleano.
+
+    Cierto si el interior del segmento entra en el interior del polígono.
+    Rozar un borde o tocar un vértice no cuenta: las ocho desigualdades se
+    aplican de forma ESTRICTA, así que un segmento que yace sobre una recta
+    soporte del polígono no lo atraviesa.
+    """
+    p, q = segmento
+    xmin, xmax, ymin, ymax, smin, smax, dmin, dmax = caja(poligono)
+
+    def forma(punto, tipo):
+        x, y = punto
+        return {"x": x, "y": y, "s": x + y, "d": x - y}[tipo]
+
+    # El punto del segmento en el parámetro t es p + t (q - p), con t en (0,1).
+    lo, hi = Fraction(0), Fraction(1)
+
+    for tipo, umbral, sentido in [("x", xmax, +1), ("x", xmin, -1),
+                                  ("y", ymax, +1), ("y", ymin, -1),
+                                  ("s", smax, +1), ("s", smin, -1),
+                                  ("d", dmax, +1), ("d", dmin, -1)]:
+        fp = forma(p, tipo)
+        fq = forma(q, tipo)
+        # valor a lo largo del segmento:  fp + t (fq - fp)
+        # se pide  sentido * valor < sentido * umbral
+        den = sentido * (fq - fp)
+        num = sentido * (umbral - fp)
+
+        if den == 0:
+            # la forma es constante sobre el segmento
+            if num <= 0:
+                return False          # no se cumple en ningún punto
+            continue                  # se cumple en todos: no recorta
+
+        t = Fraction(num, den)
+        if den > 0:
+            hi = min(hi, t)           # se cumple para t < t*
+        else:
+            lo = max(lo, t)           # se cumple para t > t*
+
+        if lo >= hi:
+            return False
+
+    return lo < hi
 
 
 

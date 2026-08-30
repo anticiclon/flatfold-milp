@@ -2,7 +2,7 @@
 import pytest
 from flatfold.geometry import (es_convexa, caja, interseca_cajas, recorta,
                                poligono_de_caja, doble_area_poligono,
-                               tiene_interior, se_solapan)
+                               tiene_interior, se_solapan, atraviesa)
 
 # Polígonos de referencia, todos con las cuatro direcciones admisibles
 CUADRADO  = [(0, 0), (4, 0), (4, 4), (0, 4)]
@@ -120,6 +120,25 @@ def test_uno_dentro_de_otro_solapan():
     a = [(0, 0), (8, 0), (8, 8), (0, 8)]
     b = [(2, 2), (4, 2), (4, 4), (2, 4)]
     assert se_solapan(a, b)
+    
+    
+CUAD = [(0,0), (4,0), (4,4), (0,4)]
+
+def test_atraviesa_por_el_medio():
+    assert atraviesa(((-2,2), (6,2)), CUAD)
+
+def test_no_atraviesa_por_el_borde():
+    """El segmento yace sobre el lado inferior: lo bordea, no lo cruza."""
+    assert not atraviesa(((-2,0), (6,0)), CUAD)
+
+def test_no_atraviesa_tocando_un_vertice():
+    assert not atraviesa(((4,4), (8,8)), CUAD)
+
+def test_no_atraviesa_por_fuera():
+    assert not atraviesa(((6,0), (6,4)), CUAD)
+
+def test_segmento_dentro_atraviesa():
+    assert atraviesa(((1,1), (3,3)), CUAD)
     
     
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"

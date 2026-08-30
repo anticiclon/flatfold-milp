@@ -263,11 +263,11 @@ def test_orientaciones_alternan_bomb8():
 
 
 
-def test_caras_plegadas_congruentes_bomb8():
-    """Todas las caras plegadas conservan el área; caen en dos posiciones."""
+def test_caras_plegadas_coinciden_bomb8():
+    """Los ocho triángulos caen exactamente uno sobre otro."""
     _, G, caras, dual, iso = monta("bomb8")
     conjuntos = {frozenset(cara_plegada(G, caras[f], iso[f])) for f in iso}
-    assert len(conjuntos) == 2
+    assert len(conjuntos) == 1
     
     
     

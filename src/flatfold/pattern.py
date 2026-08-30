@@ -194,7 +194,7 @@ def plegar(G, dual, cara_referencia):
             u, v = dual[f][g][0]["arista"]
             if G[u][v]["tipo"] == Kind.CREASE:
                 r = reflexion(G.nodes[u]["coor"], G.nodes[v]["coor"])
-                iso[g] = compon_isometrias(r, iso[f])
+                iso[g] = compon_isometrias(iso[f], r)
             else:
                 iso[g] = iso[f]
             cola.append(g)
@@ -226,9 +226,15 @@ def verifica_consistencia(G, dual, iso):
         f = i[0]
         g = i[1]
         u, v = dual.edges[i]["arista"]
+        # las dos caras deben dar la misma imagen sobre la arista común
+        for w in (u, v):
+            pw = aplica_isometria(iso[f], G.nodes[w]["coor"])
+            if pw != aplica_isometria(iso[g], G.nodes[w]["coor"]):
+                raise ValueError(
+                    f"el papel se rompe en la arista {(u,v)} entre {f} y {g}")
         if G[u][v]["tipo"] == Kind.CREASE:
                     r = reflexion(G.nodes[u]["coor"], G.nodes[v]["coor"])
-                    esperada = compon_isometrias(r, iso[f])
+                    esperada = compon_isometrias(iso[f], r)
         else:
             esperada = iso[f]
         if esperada != iso[g]:

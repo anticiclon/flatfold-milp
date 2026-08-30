@@ -50,7 +50,7 @@ def cuenta_soluciones(pares, limite=1000):
 @pytest.mark.parametrize("nombre,n_vars", [
     ("single", 1),
     ("square", 0),
-    ("map13",  1),
+    ("map13",  3),
 ])
 def test_numero_de_variables(nombre, n_vars):
     m, x = construye_modelo(cadena(nombre))

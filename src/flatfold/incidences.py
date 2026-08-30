@@ -3,6 +3,7 @@
 
 from itertools import combinations
 from flatfold.geometry import se_solapan
+from flatfold.exact import aplica_isometria, reflexion, compon_isometrias
 
 
 def pares_comparables(caras_plegadas):
@@ -26,12 +27,27 @@ def pares_comparables(caras_plegadas):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def main():
     from pathlib import Path
     from flatfold.io_fold import read_fold
     from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
                                   caras_definitivas, grafo_dual, plegar,
-                                  cara_plegada)
+                                  cara_plegada, aristas_caras)
 
     TOY = Path(__file__).resolve().parent.parent.parent / "instances" / "toy"
 
@@ -41,24 +57,44 @@ def main():
         G = crea_grafo_dirigido(fi)
         caras = caras_grafo(G)
         _, exterior = caras_definitivas(G, caras)
-        dual = grafo_dual(G, caras, caras.index(exterior))
+        idx_exterior = caras.index(exterior)
+        dual = grafo_dual(G, caras, idx_exterior)
+        dic_aristas = aristas_caras(G, caras)
 
-        if len(dual) == 0:                 # patrón sin pliegues
+        if len(dual) == 0:
             print(f"{nombre}: sin caras interiores conectadas")
             continue
 
         iso = plegar(G, dual, min(dual.nodes))
         plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-        
-        
-        print(nombre, "caras:", len(caras), "interiores:", len(iso))
-        for f, p in sorted(plegadas.items()):
-            print("  ", f, p)
-
-
         pares = pares_comparables(plegadas)
 
-        print(f"{nombre}: {len(plegadas)} caras, {len(pares)} pares -> {pares}")
+        print("=" * 60)
+        print(f"{nombre}: {len(plegadas)} caras, {len(pares)} pares")
+
+        # --- lo que consume cruces ---
+        # G, caras, plegadas, iso, dic_aristas, idx_exterior
+        internas = [(a, f, g) for a, (f, g) in dic_aristas.items()
+                    if f != idx_exterior and g != idx_exterior]
+        print(f"  aristas interiores: {len(internas)}")
+        for (u, v), f, g in internas:
+            pu_f = aplica_isometria(iso[f], G.nodes[u]["coor"])
+            pu_g = aplica_isometria(iso[g], G.nodes[u]["coor"])
+            pv_f = aplica_isometria(iso[f], G.nodes[v]["coor"])
+            pv_g = aplica_isometria(iso[g], G.nodes[v]["coor"])
+            ok = (pu_f == pu_g and pv_f == pv_g)
+            print(f"    arista {(u,v)} caras {f},{g}  "
+                  f"desde {f}: {pu_f},{pv_f}   desde {g}: {pu_g},{pv_g}   "
+                  f"{'ok' if ok else '*** DISCREPA ***'}")
+            
+    if nombre == "map_1x3":
+        r = reflexion(G.nodes[2]["coor"], G.nodes[5]["coor"])
+        print("  iso[2]:", iso[2])
+        print("  iso[3]:", iso[3])
+        print("  compon(r, iso[2]):", compon_isometrias(r, iso[2]))
+        print("  compon(r, iso[3]):", compon_isometrias(r, iso[3]))
+
+
 
 
 if __name__ == "__main__":
