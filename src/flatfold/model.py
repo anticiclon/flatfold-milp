@@ -2,7 +2,7 @@
 import gurobipy as gb
 from collections import defaultdict
 from flatfold.pattern import aristas_caras
-from flatfold.incidences import tripletas, cruces, colineales
+from flatfold.incidences import cruces, tripletas, colineales
 
 
 
@@ -174,6 +174,53 @@ def orden_de_capas(pares, valores):
 
 
 
+def analiza(ruta):
+    """
+    Tubería completa: de fichero FOLD a datos del modelo.
+    Devuelve (pares, tripletas, cruces, taco_taco, taco_tortilla,
+              tortilla_tortilla).
+    """
+    from flatfold.io_fold import read_fold
+    from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+                                  caras_definitivas, grafo_dual, plegar,
+                                  cara_plegada, aristas_caras,
+                                  verifica_consistencia)
+    from flatfold.validate import valida_pendientes, valida_kawasaki
+    from flatfold.geometry import es_convexa
+    from flatfold.incidences import pares_comparables
+
+    fi = read_fold(ruta)
+    valida_pendientes(fi)
+
+    G = crea_grafo_dirigido(fi)
+    valida_kawasaki(G)
+
+    caras = caras_grafo(G)
+    _, exterior = caras_definitivas(G, caras)
+    idx_ext = caras.index(exterior)
+    dual = grafo_dual(G, caras, idx_ext)
+    dic_aristas = aristas_caras(G, caras)
+
+    if len(dual) == 0:
+        return [], [], [], [], [], []
+
+    iso = plegar(G, dual, min(dual.nodes))
+    verifica_consistencia(G, dual, iso)
+
+    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+    for f, p in plegadas.items():
+        if not es_convexa(p):
+            raise ValueError(f"la cara {f} no es convexa: {p}")
+
+    pares = pares_comparables(plegadas)
+    trip = tripletas(plegadas, pares)
+    cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
+    tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
+    return pares, trip, cr, tt, tto, oo
+
+
+
+
 def main():
     from pathlib import Path
     import gurobipy as gb
@@ -185,7 +232,9 @@ def main():
 
     TOY = Path(__file__).resolve().parent.parent.parent / "instances" / "toy"
 
-    for nombre in ["single_fold", "square", "map_1x3",
+    for nombre in ["single_fold", "square",
+                   "map_1x2", "map_1x3", "map_1x4", "map_1x5",
+                   "map_1x6", "map_1x7", "map_1x8",
                    "waterbomb4", "waterbomb8"]:
         print("=" * 60)
         print(nombre)
@@ -224,7 +273,7 @@ def main():
                 ("todas",             dict())]:
             m, x = construye_modelo(pares)
             añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
-            print(f"    {etiqueta:20s}: {cuenta_soluciones(m)} estados")
+            print(f"    {etiqueta:20s}: {cuenta_soluciones(m, 5000)} estados")
 
 if __name__ == "__main__":
     main()
