@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 import json
 from enum import Enum
-from flatfold.exact import Point, escala_coordenadas
+from flatfold.exact import Point, escala_coordenadas, normaliza_a_reticula
 
 
 
@@ -31,14 +31,16 @@ class FoldInput:
 
 
 def read_fold(path):
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         # Fraction hace que los números decimales del JSON se lean como 
         # fracciones exactas en lugar de como float. Obtienes un objeto 
         # Fraction. Puedes acceder a esos valores así:
         # print(x.numerator)
         # print(x.denominator) 
         data = json.load(f, parse_float = Fraction)
-    vertices , escala = escala_coordenadas(data["vertices_coords"])
+    # vertices , escala = escala_coordenadas(data["vertices_coords"])
+    coords, k = normaliza_a_reticula(data["vertices_coords"])
+    vertices, escala = escala_coordenadas(coords)
     aristas = [(i, j) for i,j in data["edges_vertices"]]
     #  data.get("clave") devuelve None si no está
     asignaciones = data.get("edges_assignment")

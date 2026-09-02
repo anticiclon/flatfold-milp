@@ -107,6 +107,16 @@ def _lado_de_cara(key, poligono):
     raise ValueError("cara contenida en la recta")
 
 
+# def _lado_de_cara(key, poligono):
+#     """Lado de la recta que ocupa una cara convexa apoyada en ella."""
+#     signos = {lado(key, v) for v in poligono} - {0}
+#     if len(signos) > 1:
+#         raise ValueError(f"la cara cruza la recta {key}: {poligono}")
+#     if not signos:
+#         raise ValueError(f"cara contenida en la recta {key}")
+#     return signos.pop()
+
+
 def colineales(G, caras, plegadas, iso, dic_aristas, idx_exterior):
     """
     Output: (taco_taco, taco_tortilla, tortilla_tortilla)

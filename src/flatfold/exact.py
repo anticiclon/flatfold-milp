@@ -2,6 +2,8 @@
 
 from math import lcm
 import numpy as np
+from fractions import Fraction
+
 
 Point   = tuple[int, int]
 
@@ -129,6 +131,40 @@ def es_identidad(isometria):
 
 
 
+def normaliza_a_reticula(coords, tol=1e-9, max_den=10000):
+    """
+    Input:  coords — lista de pares de números (con ruido de coma flotante)
+            tol    — distancia máxima admitida a un punto de la retícula
+            pasos  — denominadores candidatos, de menos a más fino
+    Output: (lista de pares de Fraction exactos, k) donde la retícula es 1/k.
+
+    Los ficheros producidos por herramientas que trabajan en coma flotante
+    traen coordenadas como 0.9999999999999998 en lugar de 1. Esta función
+    recupera la retícula original: busca el 1/k más grueso que explica todas
+    las coordenadas dentro de la tolerancia, y ajusta cada una a él.
+
+    Es el ÚNICO redondeo del proyecto. Ocurre una sola vez, en la frontera
+    del sistema, y se comprueba que cada punto está realmente cerca de la
+    retícula: si no lo está, la instancia se rechaza en lugar de forzarse.
+    """
+    fracs = [[Fraction(float(c)).limit_denominator(max_den) for c in par]
+             for par in coords]
+
+    k = 1
+    for par in fracs:
+        for f in par:
+            k = lcm(k, f.denominator)
+    if k > max_den:
+        raise ValueError(f"retícula demasiado fina: 1/{k}")
+
+    for par, orig in zip(fracs, coords):
+        for f, c in zip(par, orig):
+            if abs(float(f) - float(c)) > tol:
+                raise ValueError(
+                    f"la coordenada {c!r} no cae en una retícula racional; "
+                    f"la mejor aproximación es {f} y dista {abs(float(f)-float(c)):.2e}")
+
+    return [tuple(par) for par in fracs], k
 
 
 

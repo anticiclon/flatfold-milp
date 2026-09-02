@@ -1,0 +1,107 @@
+INSTANCIAS DE EJEMPLO DE FLAT-FOLDER
+====================================
+
+Procedencia
+-----------
+Repositorio:  https://github.com/origamimagiro/flat-folder
+Carpeta:      examples/
+Autor del SW: Jason S. Ku (MIT)
+Aplicación:   https://origamimagiro.github.io/flat-folder/
+Commit:       descarga del ZIP de la rama main el 2026-08-31;
+              último commit visible de examples/: c2bf9a7
+Descargado:   2026-08-31
+Licencia:     MIT (Copyright (c) 2022 Jason S. Ku).
+              Texto completo en LICENSE-flat-folder.txt, en esta misma
+              carpeta, según exige la propia licencia.
+
+Contenido
+---------
+grids/             patrones sobre retícula, en formato FOLD (375 ficheros)
+instagram/         diseños de origami en formato FOLD (366 ficheros)
+unsatisfiable/     patrones sin ningún estado plegado válido (12 ficheros)
+grids_data.csv     resultados de referencia producidos por Flat-Folder
+instagram_data.csv ídem para instagram/
+
+No se incluye examples/original/ (formato SVG).
+
+Autoría de los patrones
+-----------------------
+La licencia MIT cubre el software y su repositorio, y permite la
+redistribución de estos ficheros. Con todo, cada patrón lleva un campo
+"file_author" con su creador (p. ej. "Daniel BROWN" en
+359_brown_4x4_D99.fold), y el README del repositorio pide autorización
+del creador para incorporar ejemplos nuevos. Al publicar resultados
+sobre este conjunto conviene reconocer tanto la fuente (Ku) como a los
+diseñadores de los patrones.
+
+
+Estado respecto de nuestro modelo (a 2026-08-31)
+------------------------------------------------
+
+grids/ (375 ficheros)
+
+  364  cumplen las hipótesis de modelado (box-pleating y Kawasaki)
+   11  rechazados por pendientes no admisibles: fuera del alcance del
+        modelo, que solo cubre pendientes 0, inf y +-1
+
+  De los 364 admitidos, 363 tienen pliegues y uno es un cuadrado sin
+  ellos. En los 363 las caras plegadas son todas convexas, de modo que
+  no requieren subdivisión convexa. Los 363 resultan FACTIBLES con el
+  modelo completo, en coincidencia con Flat-Folder, que los pliega.
+
+  Tamaño: de 1 a 289 caras interiores, mediana 109.
+
+instagram/ (366 ficheros)
+
+   38  cumplen las hipótesis; de ellos 34 se resuelven y 4 agotan el
+        límite de 300 s (entre 65.000 y 128.000 variables)
+   26  rechazados por pendiente no admisible
+  302  rechazados por no caer en ninguna retícula racional: son
+        diseños con ángulos arbitrarios
+
+  Tamaño: de 7 a 1368 caras interiores, mediana 81.
+
+unsatisfiable/ (12 ficheros)
+
+  Los 12 quedan fuera del alcance del modelo (10 por retícula, 2 por
+  pendiente), de modo que este conjunto no sirve todavía para validar
+  la detección de infactibilidad.
+
+
+Contraste con grids_data.csv
+----------------------------
+El CSV trae, además del número de estados, los recuentos de variables y
+de restricciones por familia. Comparados con nuestra generación:
+
+  338  coinciden en los ocho campos (vertices, edges, faces, variables,
+        taco-taco, taco-tortilla, tortilla-tortilla, transitivity)
+   26  difieren
+
+En 25 de los 26 difieren también "vertices" y "edges", siempre a la
+baja: el CSV se generó unos dos años antes de que los ficheros FOLD se
+modificaran para eliminar vértices superfluos (véanse los mensajes de
+commit de examples/). El CSV corresponde, por tanto, a una versión
+anterior de las instancias.
+
+Para descartar un fallo propio se ejecutó el algoritmo original de
+Flat-Folder (ExE_fill_BT, en conversion.js) con Node sobre los ficheros
+actuales de 133_brown_4x4_A111 y 121_brown_4x4_A99. En ambos casos
+reproduce nuestros recuentos y no los del CSV; la generación de
+restricciones colineales coincide con la de Ku cuádrupla a cuádrupla.
+
+El caso 26 es 000_brown_2x2_A1, un cuadrado sin pliegues, donde nuestro
+script de comparación devolvía ceros en lugar de los recuentos reales.
+
+
+Observación sobre las coordenadas
+---------------------------------
+Los ficheros vienen con ruido de coma flotante: la coordenada 1 aparece
+como 0.9999999999999998, y el 0 como 5.68e-16. Las retículas usadas no
+son solo diádicas: aparecen sextos y séptimos en los patrones 3x3. La
+lectura normaliza a la retícula racional más gruesa que explica todas
+las coordenadas dentro de una tolerancia, y rechaza el fichero si no
+existe ninguna. Véase normaliza_a_reticula en src/flatfold/exact.py.
+
+Algunos ficheros llevan caracteres no ASCII en los campos de texto
+(p. ej. 286_carrotkei_Keied_Keqing.fold), de modo que hay que abrirlos
+con encoding="utf-8" y no con la codificación por defecto de Windows.

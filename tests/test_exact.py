@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+from fractions import Fraction
+import pytest
 from flatfold.exact import (pendiente_admisible, reflexion, aplica_isometria,
-                            compon_isometrias, es_identidad)
+                            compon_isometrias, es_identidad, 
+                            normaliza_a_reticula)
+
 
 
 def test_pendientes_admisibles():
@@ -48,6 +52,37 @@ def test_compon_no_conmuta():
     
     
     
+def test_reticula_limpia():
+    coords = [(0, 0), (1, 0), (1, 1)]
+    salida, k = normaliza_a_reticula(coords)
+    assert k == 1
+    assert salida == [(0, 0), (1, 0), (1, 1)]
+
+def test_quita_el_ruido():
+    sucio = [(0.9999999999999998, 5.68e-16), (0.05000000000000004, 0.15)]
+    salida, k = normaliza_a_reticula(sucio)
+    assert k == 20
+    assert salida == [(Fraction(1), Fraction(0)),
+                      (Fraction(1, 20), Fraction(3, 20))]
+
+def test_rechaza_lo_que_no_es_reticula():
+    """
+    Un patrón con ángulos arbitrarios no cae en ninguna retícula racional
+    razonable y debe rechazarse en lugar de forzarse a una.
+    """
+    from math import sqrt
+    with pytest.raises(ValueError):
+        normaliza_a_reticula([(0, 0), (sqrt(2) / 2, 0)])
+        
+        
+def test_acepta_reticulas_de_papel():
+    """Sextos y séptimos aparecen en patrones 3x3 y son legítimos."""
+    salida, k = normaliza_a_reticula([(0, 0),
+                                      (0.1666666666666667, 0),
+                                      (0.8571428571428572, 0)])
+    assert k == 42                       # lcm(6, 7)
+    assert salida[1][0] == Fraction(1, 6)
+    assert salida[2][0] == Fraction(6, 7)
     
     
     
