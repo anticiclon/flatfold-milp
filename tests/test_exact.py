@@ -4,7 +4,7 @@ import pytest
 from flatfold.exact import (pendiente_admisible, reflexion, aplica_isometria,
                             compon_isometrias, es_identidad, 
                             normaliza_a_reticula)
-
+from flatfold.incidences import sigma
 
 
 def test_pendientes_admisibles():
@@ -85,6 +85,18 @@ def test_acepta_reticulas_de_papel():
     assert salida[2][0] == Fraction(6, 7)
     
     
+    
+    
+def test_sigma():
+    assert sigma(((1, 0, 0, 1), (0, 0))) == 1       # identidad
+    r = reflexion((0, 4), (6, 4))
+    assert sigma(r) == -1                            # una reflexión
+    assert sigma(compon_isometrias(r, r)) == 1       # dos reflexiones
+
+
+
+
+   
     
     
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"

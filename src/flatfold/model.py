@@ -221,6 +221,21 @@ def analiza(ruta):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def main():
     from pathlib import Path
     import gurobipy as gb
@@ -274,6 +289,14 @@ def main():
             m, x = construye_modelo(pares)
             añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
             print(f"    {etiqueta:20s}: {cuenta_soluciones(m, 5000)} estados")
+            
+            
+            
+            
+            
+            
+            
+            
 
 if __name__ == "__main__":
     main()

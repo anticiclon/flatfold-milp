@@ -35,12 +35,21 @@ def escribe(nombre, patron):
     print(f"  escrito {ruta.name}: "
           f"{len(patron['vertices_coords'])} vértices, "
           f"{len(patron['edges_vertices'])} aristas")
+    
+def mapa_1xn_MM(n):
+    """Tira de n celdas con TODOS los pliegues en monte."""
+    p = mapa_1xn(n)
+    p["edges_assignment"] = ["B" if a == "B" else "M"
+                             for a in p["edges_assignment"]]
+    return p
 
 
 def main():
     print("Generando instancias de juguete...")
     for n in range(2, 9):
         escribe(f"map_1x{n}", mapa_1xn(n))
+    
+    escribe("map_1x3_MM", mapa_1xn_MM(3))
 
 
 

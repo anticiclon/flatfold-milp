@@ -172,7 +172,19 @@ def normaliza_a_reticula(coords, tol=1e-9, max_den=10000):
 
 
     
-    
+def sigma(isometria):
+    """
+    Input:  una isometría (A, t).
+    Output: +1 si conserva la orientación, -1 si la invierte.
+
+    Es el determinante de la parte lineal. En el plegado equivale a la
+    paridad del número de pliegues cruzados desde la cara de referencia,
+    y dice si la cara quedó del derecho o del revés.
+    """
+    (a, b, c, d), _ = isometria
+    det = a * d - b * c
+    assert det in (1, -1), f"parte lineal no ortogonal: {isometria}"
+    return det
     
     
     
