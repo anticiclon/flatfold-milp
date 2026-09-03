@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from math import lcm
-import numpy as np
 from fractions import Fraction
 
 
@@ -45,12 +44,18 @@ direcciones = {
 
  
 
+def signo(n):
+    return (n > 0) - (n < 0)
+
+
+
+
 
 def direccion(G, u, v):
     """Da la dirección u -> v."""
     xu, yu = G.nodes[u]["coor"]
     xv, yv = G.nodes[v]["coor"]
-    return direcciones[(np.sign(xv - xu), np.sign(yv - yu))]
+    return direcciones[(signo(xv - xu), signo(yv - yu))]
 
 
 
@@ -73,7 +78,7 @@ def reflexion(p, q):
     punto al reflejarse respecto a esa recta
     """
     vector = (q[0]-p[0], q[1]-p[1])
-    direccion = (int(np.sign(vector[0])), int(np.sign(vector[1])))
+    direccion = (int(signo(vector[0])), int(signo(vector[1])))
     # Recta vertical
     if direccion in ((0, 1), (0, -1)):
         A = (-1, 0, 0, 1)
@@ -193,7 +198,16 @@ def sigma(isometria):
     
     
     
-    
+def indice_literal(indice_pares, u, v):
+    """
+    Input:  indice_pares — {(f,g): i} con f < g;  u, v — dos caras.
+    Output: (i, s); s = 0 significa x_i, s = 1 significa 1 - x_i.
+    """
+    if u == v:
+        raise ValueError(f"literal sobre la misma cara: {u}")
+    if u < v:
+        return indice_pares[(u, v)], 0
+    return indice_pares[(v, u)], 1
     
     
     

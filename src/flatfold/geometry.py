@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from fractions import Fraction
-import numpy as np
+from flatfold.exact import signo
 Point   = tuple[int, int]
 LineKey = tuple[str, int]
 
@@ -23,7 +23,7 @@ def es_convexa(poligono):
     pares_aristas = list(zip(aristas, aristas[1:] + aristas[:1]))
     
     # signo de referencia
-    signo = 0
+    valor_signo = 0
     
     for i in pares_aristas:
         # Vectores consecutivos
@@ -35,13 +35,13 @@ def es_convexa(poligono):
         
         if cruz != 0:
             # Guardar el primer signo encontrado
-            if signo == 0:
+            if valor_signo == 0:
                 if cruz > 0:
-                    signo = 1
+                    valor_signo = 1
                 else:
-                    signo = -1
+                    valor_signo = -1
             # Buscar cambios de signo
-            elif (cruz > 0 and signo < 0) or (cruz < 0 and signo > 0):
+            elif (cruz > 0 and valor_signo < 0) or (cruz < 0 and valor_signo > 0):
                 return False
             
     return True
@@ -227,8 +227,8 @@ def doble_area_poligono(vertices):
     return abs(suma)
 
 
-def tiene_interior(caja):
-    p = poligono_de_caja(caja)
+def tiene_interior(c):
+    p = poligono_de_caja(c)
     if len(p) < 3:
         return False
     return doble_area_poligono(p) != 0
@@ -343,16 +343,16 @@ def lado(key: LineKey, p: Point) -> int:
     valor = key[1]
     if tipo_pendiente == "H":
         # y - Y0
-        return np.sign(p[1] - valor)
+        return signo(p[1] - valor)
     elif tipo_pendiente == "V":
         # x - X0
-        return np.sign(p[0] - valor)
+        return signo(p[0] - valor)
     elif tipo_pendiente == "D":
         # (y - x) - Y0
-        return np.sign(p[1] - p[0] - valor)
+        return signo(p[1] - p[0] - valor)
     elif tipo_pendiente == "A":
         # (y + x) - Y0
-        return np.sign(p[1] + p[0] - valor)
+        return signo(p[1] + p[0] - valor)
     raise ValueError(f"LineKey inválida: {key}")
 
 

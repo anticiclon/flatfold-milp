@@ -82,6 +82,50 @@ def test_asignacion_del_fichero_es_factible():
         assert n == len(fi.dicc_montana_valle)
         m.optimize()
         assert m.SolCount > 0, nombre
+        
+        
+        
+def test_asignacion_irrealizable_es_infactible():
+    """
+    waterbomb8 es geométricamente válido —cumple Kawasaki y se pliega—
+    pero su asignación M,V,M,V,M,V,M,V viola Maekawa: en un vértice de
+    grado 8 la diferencia entre montes y valles debe ser 2, no 0.
+
+    El modelo no impone Maekawa; la detecta como consecuencia
+    (Corolario 11.4). Este test comprueba justamente eso.
+    """
+    fi, _, _, _, _, m, x, etiq = prepara("waterbomb8")
+    n = fija_etiquetas(m, x, etiq, fi.dicc_montana_valle)
+    assert n == 8
+    m.optimize()
+    assert m.SolCount == 0
+    assert m.Status == gb.GRB.INFEASIBLE
+
+
+def test_waterbomb8_es_factible_sin_prescribir():
+    """Sin fijar etiquetas sí existe orden de capas: el patrón se pliega,
+    lo que falla es esa asignación concreta."""
+    _, _, _, _, _, m, x, _ = prepara("waterbomb8")
+    m.optimize()
+    assert m.SolCount > 0
+
+
+def test_reparacion_de_waterbomb8():
+    """Cuántos pliegues hay que invertir para hacerla realizable."""
+    fi, _, _, _, _, m, x, etiq = prepara("waterbomb8")
+    m.setObjective(energia(x, etiq, fi.dicc_montana_valle), gb.GRB.MINIMIZE)
+    m.optimize()
+    assert m.SolCount > 0
+    assert int(round(m.ObjVal)) >= 1
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 
 def test_la_solucion_respeta_las_etiquetas_fijadas():
