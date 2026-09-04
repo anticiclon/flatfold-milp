@@ -75,10 +75,10 @@ def añade_igualdades(m, x, pares_de_pares):
 
 
 
-def añade_restricciones(m, x, tripletas, cruces, taco_taco,
-                        taco_tortilla, tortilla_tortilla,
+def añade_restricciones(m, x, indice_pares, tripletas, cruces, taco_taco,
+                        taco_tortilla, tortilla_tortilla, blb=None,
                         con_transitividad=True, con_cruces=True,
-                        con_colineales=True):
+                        con_colineales=True, con_blb=False):
     """
     Añade las cinco familias al modelo. Las banderas permiten activarlas
     por separado, que es lo que hace falta para medir el efecto de cada una.
@@ -91,6 +91,10 @@ def añade_restricciones(m, x, tripletas, cruces, taco_taco,
         añade_taco_taco(m, x, taco_taco)
         añade_igualdades(m, x, taco_tortilla)
         añade_igualdades(m, x, tortilla_tortilla)
+    if con_blb and blb:
+        añade_blb(m, x, indice_pares, blb)
+        
+        
     
 def resuelve(m, x, tiempo_limite=None, semilla=0, silencioso=True):
     """
@@ -183,8 +187,7 @@ def analiza(ruta):
     from flatfold.io_fold import read_fold
     from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
                                   caras_definitivas, grafo_dual, plegar,
-                                  cara_plegada, aristas_caras,
-                                  verifica_consistencia)
+                                  cara_plegada, verifica_consistencia)
     from flatfold.validate import valida_pendientes, valida_kawasaki
     from flatfold.geometry import es_convexa
     from flatfold.incidences import pares_comparables
@@ -220,75 +223,198 @@ def analiza(ruta):
 
 
 
+def construye_reducido(datos, nombre="componente", minimizar=False):
+    """
+    Input:  datos — un diccionario de reparte_por_componentes:
+                    {"raices", "tripletas", "paridades", "terminos"}
+            minimizar — si hay objetivo, lo pone; si no, factibilidad pura
+    Output: (modelo, beta) con beta indexado por raíz.
+
+    Una binaria por raíz de la componente. Las tripletas imponen que los
+    tres literales no valgan lo mismo; las paridades, que la suma de sus
+    literales sea par (o impar, según la constante que arrastren).
+    """
+    m = gb.Model(nombre)
+    raices = sorted(datos["raices"])
+    beta = m.addVars(raices, vtype=gb.GRB.BINARY, name="b")
+
+    def lit(r, s):
+        return beta[r] if s == 0 else 1 - beta[r]
+
+    for lits in datos["tripletas"]:
+        s = gb.quicksum(lit(r, sg) for r, sg in lits)
+        m.addConstr(s >= 1)
+        m.addConstr(s <= 2)
+
+    for lits in datos["paridades"]:
+        n = len(lits)
+        k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=n // 2)
+        m.addConstr(gb.quicksum(lit(r, s) for r, s in lits) == 2 * k)
+
+    if minimizar and datos["terminos"]:
+        m.setObjective(
+            gb.quicksum(c * beta[r] for r, c in datos["terminos"].items()),
+            gb.GRB.MINIMIZE)
+
+    m.update()
+    return m, beta
 
 
 
 
+# def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
+#                              limite_pool=10**7, tiempo=None, silencioso=True):
+def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
+                             limite_pool=10**7, tiempo=None, silencioso=True,
+                             presolve_gurobi=-1):
+    """
+    Input:  datos_comps — lista de reparte_por_componentes()
+            constante — el término independiente de energia_reducida()
+            modo — "factibilidad" | "recuento" | "optimizacion"
+    Output: según el modo:
+            factibilidad  -> (bool, valores)
+            recuento      -> (n_estados, None)
+            optimizacion  -> (valor_optimo, valores)
+            donde valores es {raiz: 0 o 1}, o None si no procede.
 
+    Cada componente se resuelve por separado. Los recuentos se MULTIPLICAN
+    y los óptimos se SUMAN. Una componente sin restricciones es una
+    variable libre: factible, dos estados, óptimo cero.
+    """
+    total_estados = 1
+    total_valor = constante
+    valores = {}
+    total_nodes = 0
 
+    for k, datos in enumerate(datos_comps):
+        m, beta = construye_reducido(datos, f"comp{k}",
+                                     minimizar=(modo == "optimizacion"))
+        if silencioso:
+            m.Params.OutputFlag = 0
+        if tiempo is not None:
+            m.Params.TimeLimit = tiempo
+        m.Params.IntegralityFocus = 1
+        m.Params.MIPGap = 0
+        m.Params.Presolve = presolve_gurobi      # <- nueva
 
-
-
-
-
-
-
-
-
-
-def main():
-    from pathlib import Path
-    import gurobipy as gb
-    from flatfold.io_fold import read_fold
-    from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                                  caras_definitivas, grafo_dual, plegar,
-                                  cara_plegada)
-    from flatfold.incidences import pares_comparables
-
-    TOY = Path(__file__).resolve().parent.parent.parent / "instances" / "toy"
-
-    for nombre in ["single_fold", "square",
-                   "map_1x2", "map_1x3", "map_1x4", "map_1x5",
-                   "map_1x6", "map_1x7", "map_1x8",
-                   "waterbomb4", "waterbomb8"]:
-        print("=" * 60)
-        print(nombre)
-
-        # --- etapas 1 a 5 ---
-        fi = read_fold(TOY / f"{nombre}.fold")
-        G = crea_grafo_dirigido(fi)
-        caras = caras_grafo(G)
-        _, exterior = caras_definitivas(G, caras)
-        idx_ext = caras.index(exterior)
-        dual = grafo_dual(G, caras, idx_ext)
-        dic_aristas = aristas_caras(G, caras)
-
-        if len(dual) == 0:
-            print("  sin caras interiores")
+        if modo == "recuento":
+            m.Params.PoolSearchMode = 2
+            m.Params.PoolSolutions = limite_pool
+            m.optimize()
+            total_nodes += m.NodeCount
+            if m.SolCount == 0:
+                return 0, None
+            if m.SolCount >= limite_pool:
+                raise RuntimeError(
+                    f"componente {k}: el pool se llenó ({limite_pool})")
+            total_estados *= m.SolCount
             continue
 
-        iso = plegar(G, dual, min(dual.nodes))
-        plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-        pares = pares_comparables(plegadas)
-        trip = tripletas(plegadas, pares)
-        cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext)
-        tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
+        if modo == "factibilidad":
+            m.Params.SolutionLimit = 1
 
-        print(f"  variables: {len(pares)}   tripletas: {len(trip)}   "
-              f"cruces: {len(cr)}   taco-taco: {len(tt)}")
+        m.optimize()
+        # if m.SolCount == 0:
+        #     return (False, None) if modo == "factibilidad" else (None, None)
+        total_nodes += m.NodeCount
+        
+        if m.SolCount == 0:
+            return (False, None, total_nodes) if modo == "factibilidad" \
+                   else (None, None, total_nodes)
 
-        # --- recuento con cada combinación de familias ---
-        for etiqueta, banderas in [
-                ("sin restricciones", dict(con_transitividad=False,
-                                           con_cruces=False,
-                                           con_colineales=False)),
-                ("+ transitividad",   dict(con_cruces=False,
-                                           con_colineales=False)),
-                ("+ cruces",          dict(con_colineales=False)),
-                ("todas",             dict())]:
-            m, x = construye_modelo(pares)
-            añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
-            print(f"    {etiqueta:20s}: {cuenta_soluciones(m, 5000)} estados")
+        valores.update({r: int(round(v.X)) for r, v in beta.items()})
+        if modo == "optimizacion":
+            total_valor += m.ObjVal
+
+    if modo == "recuento":
+        # return total_estados, None
+        return total_estados, None, total_nodes
+    if modo == "factibilidad":
+        # return True, valores
+        return True, valores, total_nodes
+    # return total_valor, valores
+    return total_valor, valores, total_nodes
+
+
+
+# def añade_blb(m, x, indice_pares, blb):
+#     """Los dos pliegues que delimitan un mínimo local tienen etiquetas
+#     opuestas: m_e1 != m_e2."""
+#     for ((u1, v1), s1), ((u2, v2), s2) in blb:
+#         l1 = literal(x, indice_pares, u1, v1)
+#         l2 = literal(x, indice_pares, u2, v2)
+#         if s1:
+#             l1 = 1 - l1
+#         if s2:
+#             l2 = 1 - l2
+#         m.addConstr(l1 == 1 - l2)
+
+def añade_blb(m, x, indice_pares, blb):
+    """Los dos pliegues que delimitan un mínimo local tienen etiquetas
+    opuestas: m_e1 != m_e2."""
+    for ((u1, v1), s1), ((u2, v2), s2) in blb:
+        l1 = literal(x, u1, v1)
+        l2 = literal(x, u2, v2)
+        if s1:
+            l1 = 1 - l1
+        if s2:
+            l2 = 1 - l2
+        m.addConstr(l1 == 1 - l2)
+
+
+# def main():
+#     from pathlib import Path
+#     import gurobipy as gb
+#     from flatfold.io_fold import read_fold
+#     from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+#                                   caras_definitivas, grafo_dual, plegar,
+#                                   cara_plegada)
+#     from flatfold.incidences import pares_comparables
+
+#     TOY = Path(__file__).resolve().parent.parent.parent / "instances" / "toy"
+
+#     for nombre in ["single_fold", "square",
+#                    "map_1x2", "map_1x3", "map_1x4", "map_1x5",
+#                    "map_1x6", "map_1x7", "map_1x8",
+#                    "waterbomb4", "waterbomb8"]:
+#         print("=" * 60)
+#         print(nombre)
+
+#         # --- etapas 1 a 5 ---
+#         fi = read_fold(TOY / f"{nombre}.fold")
+#         G = crea_grafo_dirigido(fi)
+#         caras = caras_grafo(G)
+#         _, exterior = caras_definitivas(G, caras)
+#         idx_ext = caras.index(exterior)
+#         dual = grafo_dual(G, caras, idx_ext)
+#         dic_aristas = aristas_caras(G, caras)
+
+#         if len(dual) == 0:
+#             print("  sin caras interiores")
+#             continue
+
+#         iso = plegar(G, dual, min(dual.nodes))
+#         plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#         pares = pares_comparables(plegadas)
+#         trip = tripletas(plegadas, pares)
+#         cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext)
+#         tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
+
+#         print(f"  variables: {len(pares)}   tripletas: {len(trip)}   "
+#               f"cruces: {len(cr)}   taco-taco: {len(tt)}")
+
+#         # --- recuento con cada combinación de familias ---
+#         for etiqueta, banderas in [
+#                 ("sin restricciones", dict(con_transitividad=False,
+#                                            con_cruces=False,
+#                                            con_colineales=False)),
+#                 ("+ transitividad",   dict(con_cruces=False,
+#                                            con_colineales=False)),
+#                 ("+ cruces",          dict(con_colineales=False)),
+#                 ("todas",             dict())]:
+#             m, x = construye_modelo(pares)
+#             añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
+#             print(f"    {etiqueta:20s}: {cuenta_soluciones(m, 5000)} estados")
             
             
             
@@ -298,5 +424,5 @@ def main():
             
             
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

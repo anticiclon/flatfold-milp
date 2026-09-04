@@ -20,7 +20,9 @@ def modelo_completo(datos, **banderas):
     """Modelo con las restricciones activadas según las banderas."""
     pares, trip, cr, tt, tto, oo = datos
     m, x = construye_modelo(pares)
-    añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
+    # añade_restricciones(m, x, trip, cr, tt, tto, oo, **banderas)
+    indice_pares = {par: i for i, par in enumerate(pares)}
+    añade_restricciones(m, x, indice_pares, trip, cr, tt, tto, oo, **banderas)
     return m, x
 
 

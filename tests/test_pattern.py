@@ -15,7 +15,6 @@ RUTAS = {
     "map13":  TOY / "map_1x3.fold",
     "bomb":   TOY / "waterbomb4.fold",
     "bomb8":   TOY / "waterbomb8.fold",
-
 }
 
 

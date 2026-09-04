@@ -34,7 +34,9 @@ def prepara(nombre):
     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
 
     m, x = construye_modelo(pares)
-    añade_restricciones(m, x, trip, cr, tt, tto, oo)
+    # añade_restricciones(m, x, trip, cr, tt, tto, oo)
+    indice_pares = {par: i for i, par in enumerate(pares)}
+    añade_restricciones(m, x, indice_pares, trip, cr, tt, tto, oo)
     m.Params.OutputFlag = 0
 
     etiq = etiquetas_mv(G, fi, iso, dic, idx)

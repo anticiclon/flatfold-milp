@@ -8,8 +8,9 @@ Created on Wed Sep  2 11:16:30 2026
 from flatfold.exact import  sigma
 from flatfold.io_fold import Kind
 from flatfold.model import literal
-
-
+from flatfold.pattern import vecinos_ordenados
+from flatfold.validate import (vertices_interiores, sectores,
+                                   minimos_locales)
 
 
 def etiquetas_mv(G, fi, iso, dic_aristas, idx_exterior):
@@ -100,5 +101,40 @@ def energia(x, etiquetas, objetivo, pesos=None):
         me = literal(x, u, v) if s == 0 else 1 - literal(x, u, v)
         expr += w * me if deseado == 0 else w * (1 - me)
     return expr
+
+def restricciones_blb(G, fi, iso, dic_aristas, idx_exterior, etiquetas):
+    """
+    Input:  el grafo, el FoldInput, las isometrías, las adyacencias,
+            el índice de la cara exterior y las etiquetas de etiquetas_mv.
+    Output: lista de ((par1, s1), (par2, s2)) — literales que deben ser
+            COMPLEMENTARIOS, es decir m_e1 != m_e2.
+
+    Condición big-little-big: si un sector es mínimo local estricto, los
+    dos pliegues que lo delimitan tienen etiquetas opuestas.
+
+    Es una restricción implicada (Corolario 11.4): no cambia el conjunto
+    de soluciones. Su interés es doble: puede podar el árbol de búsqueda,
+    y al ser afín sobre F2 puede alimentar el presolve y reducir más
+    variables.
+    """
+
+    vecinos = vecinos_ordenados(G)
+
+    # de par de vértices a número de arista del fichero
+    num_arista = {}
+    for i, (u, v) in enumerate(fi.aristas):
+        num_arista[(u, v) if u < v else (v, u)] = i
+
+    salida = []
+    for v in vertices_interiores(G):
+        secs = sectores(G, vecinos, v)
+        for i in minimos_locales(secs):
+            _, w1, w2 = secs[i]
+            e1 = num_arista[(v, w1) if v < w1 else (w1, v)]
+            e2 = num_arista[(v, w2) if v < w2 else (w2, v)]
+            if e1 not in etiquetas or e2 not in etiquetas:
+                continue                  # pliegue sin etiqueta: saltar
+            salida.append((etiquetas[e1], etiquetas[e2]))
+    return salida
 
 

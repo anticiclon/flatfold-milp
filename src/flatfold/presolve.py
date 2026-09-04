@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 
 def indice_literal(indice_pares, u, v):
@@ -98,11 +98,12 @@ class UnionFindParidad:
 
 
 def literales_a_ecuaciones(pares, cruces, tto, oo, tt,
-                           etiquetas=None, prescritas=None):
+                           etiquetas=None, prescritas=None, blb=None):
     """
     Input:  pares — lista de (f,g) con f<g, que define los índices
             cruces, tto, oo, tt — las familias generadas por incidences
-            etiquetas, prescritas — opcionales, para asignación prescrita
+            etiquetas, prescritas — opcionales, para asignación prescrita,
+            blb — opcionales
     Output: (igualdades, paridades, fijaciones)
             igualdades: [(i1, s1, i2, s2)]     significa X_1 = X_2
             paridades:  [[(i, s), ...]]        suma par de los literales
@@ -144,6 +145,9 @@ def literales_a_ecuaciones(pares, cruces, tto, oo, tt,
             (u, v), s_orient = etiquetas[arista]
             i, s = indice_literal(idx, u, v)
             fijaciones.append((i, s ^ s_orient, valor))
+    
+    if blb:
+        igualdades.extend(blb_a_igualdades(blb, pares))
 
     return igualdades, paridades, fijaciones
 
@@ -333,4 +337,261 @@ def componentes(mapeo, paridades_restantes, tripletas, pares):
     return comps
 
 
+
+
+
+
+
+
+
+def diagnostica_tripletas(mapeo, tripletas, pares):
+    """
+    Cuenta cómo quedan las tripletas al sustituir por raíces, sin decidir
+    qué hacer con las degeneradas. Sirve para saber qué casos aparecen
+    de verdad antes de escribir el tratamiento.
+    """
+    idx = {par: i for i, par in enumerate(pares)}
+    conteo = Counter()
+
+    for f, g, h in tripletas:
+        lits = []
+        for u, v in ((f, g), (g, h), (h, f)):
+            i, s = indice_literal(idx, u, v)
+            e = mapeo[i]
+            lits.append(("c", e[1] ^ s) if e[0] == "const"
+                        else ("v", e[1], e[2] ^ s))
+
+        n_const = sum(1 for l in lits if l[0] == "c")
+        raices = [l[1] for l in lits if l[0] == "v"]
+        n_repes = len(raices) - len(set(raices))
+
+        conteo[(n_const, n_repes)] += 1
+
+    return conteo
+
+
+
+
+def reescribe_tripletas(mapeo, tripletas, pares, traza = None):
+    """
+    Input:  mapeo — el de reduce(), tripletas — [(f,g,h)], pares.
+    Output: (vivas, igualdades_nuevas)
+            vivas — [[(raiz, signo) x3]] con tres raíces distintas
+            igualdades_nuevas — [(r1, s1, r2, s2)] a realimentar en reduce
+
+    La condición 1 <= X1+X2+X3 <= 2 dice que los tres literales no valen
+    lo mismo. Al sustituir por raíces puede degenerar:
+
+      - tres raíces distintas   -> sobrevive
+      - dos raíces coinciden    -> si esos dos literales son iguales, el
+                                   tercero debe diferir (nueva igualdad);
+                                   si son complementarios, ya se cumple
+      - las tres coinciden      -> trivial, salvo que los tres literales
+                                   tengan el mismo signo, que sería
+                                   infactible
+
+    Medido sobre 30 millones de tripletas de grids e instagram, nunca
+    aparece un literal determinado por el presolve, de modo que el caso
+    "no ambos iguales a c" —que no es afín sobre F2— no se da.
+    """
+    idx = {par: i for i, par in enumerate(pares)}
+    vivas, igualdades = [], []
+    if traza is None:
+        traza = Counter()
+
+
+    for f, g, h in tripletas:
+        lits = []
+        for u, v in ((f, g), (g, h), (h, f)):
+            i, s = indice_literal(idx, u, v)
+            entrada = mapeo[i]
+            if entrada[0] == "const":
+                raise Infactible(
+                    "tripleta con literal determinado: caso no previsto "
+                    f"({f}, {g}, {h})")
+            lits.append((entrada[1], entrada[2] ^ s))
+
+        raices = [r for r, _ in lits]
+        distintas = len(set(raices))
+
+        if distintas == 3:
+            vivas.append(lits)
+            traza["viva"] += 1
+
+        elif distintas == 2:
+            # localizar el par repetido y dejar el tercero aparte
+            if raices[0] == raices[1]:
+                (ra, sa), (rb, sb), (rc, sc) = lits
+            elif raices[0] == raices[2]:
+                (ra, sa), (rc, sc), (rb, sb) = lits
+            else:
+                (rc, sc), (ra, sa), (rb, sb) = lits
+
+            if sa == sb:
+                # los dos son el mismo literal: el tercero debe diferir
+                # si sa != sb ya difieren entre sí: trivial
+                igualdades.append((ra, sa, rc, sc ^ 1))
+                traza["dos_iguales -> igualdad"] += 1
+            else:
+                traza["dos_complementarios -> trivial"] += 1
+
+        else:                       # las tres sobre la misma raíz
+            signos = {s for _, s in lits}
+            if len(signos) == 1:
+                raise Infactible(
+                    f"tripleta con tres literales idénticos: ({f}, {g}, {h})")
+            # hay al menos uno distinto: trivial
+            traza["tres_misma_raiz -> trivial"] += 1
+
+    return vivas, igualdades
+
+
+
+
+
+def reduce_completo(n_vars, igualdades, paridades, fijaciones,
+                    tripletas, pares, max_iter=50):
+    """
+    Input:  lo mismo que reduce(), más las tripletas en caras y los pares.
+    Output: (mapeo, paridades_restantes, tripletas_vivas, n_iter)
+
+    Punto fijo exterior. reduce() colapsa el sistema afín; al reescribir
+    las tripletas sobre las raíces resultantes, las que degeneran producen
+    igualdades nuevas, que a su vez pueden colapsar más paridades y más
+    tripletas. Se itera hasta que no aparecen igualdades nuevas.
+
+    Termina siempre: cada iteración une al menos dos clases del union-find,
+    y el número de clases es finito.
+    """
+    ig = list(igualdades)
+
+    for n_iter in range(1, max_iter + 1):
+        mapeo, restantes, _ = reduce(n_vars, ig, paridades, fijaciones)
+        vivas, nuevas = reescribe_tripletas(mapeo, tripletas, pares)
+
+        if not nuevas:
+            return mapeo, restantes, vivas, n_iter
+
+        ig.extend(nuevas)
+
+    raise RuntimeError(f"el punto fijo no cerró en {max_iter} iteraciones")
+
+
+
+def energia_reducida(mapeo, pares, etiquetas, objetivo, pesos=None):
+    """
+    Input:  mapeo — el de reduce()
+            pares — lista de (f,g), para traducir a índices
+            etiquetas — {arista: ((u,v), s)} de etiquetas_mv
+            objetivo — {arista: 0 o 1}, la asignación deseada
+            pesos — {arista: w}, o None para peso 1
+    Output: (terminos, constante) con terminos = {raiz: coeficiente}
+
+    Traduce la energía a las variables supervivientes:
+
+        sum_{e: m^_e = 0} w_e * m_e  +  sum_{e: m^_e = 1} w_e * (1 - m_e)
+
+    Cada m_e es un literal sobre una variable x_i. Tras el presolve, x_i
+    vale beta_r o su complemento, o es una constante. En el primer caso
+    aporta un término lineal en beta_r; en el segundo, una constante.
+
+    Los coeficientes se ACUMULAN: dos pliegues distintos pueden acabar
+    sobre la misma raíz.
+    """
+    idx = {par: i for i, par in enumerate(pares)}
+    terminos = defaultdict(int)
+    constante = 0
+
+    for arista, deseado in objetivo.items():
+        if arista not in etiquetas:
+            continue
+        w = 1 if pesos is None else pesos.get(arista, 1)
+        if w == 0:
+            continue
+
+        (u, v), s_orient = etiquetas[arista]
+        i, s_par = indice_literal(idx, u, v)
+        s = s_par ^ s_orient          # signo total del literal m_e
+
+        entrada = mapeo[i]
+        if entrada[0] == "const":
+            m_e = entrada[1] ^ s
+            # penaliza si m_e difiere de lo deseado
+            constante += w * (m_e if deseado == 0 else 1 - m_e)
+            continue
+
+        _, raiz, s_raiz = entrada
+        # m_e = beta_raiz XOR (s ^ s_raiz)
+        t = s ^ s_raiz
+
+        # penalización = w * m_e            si deseado = 0
+        #              = w * (1 - m_e)      si deseado = 1
+        # y m_e = beta si t = 0, o 1 - beta si t = 1
+        if (deseado == 0) == (t == 0):
+            terminos[raiz] += w           # w * beta
+        else:
+            terminos[raiz] -= w           # w * (1 - beta)
+            constante += w
+
+    return dict(terminos), constante
+
+
+def reparte_por_componentes(comps, tripletas_vivas, paridades, terminos):
+    """
+    Input:  comps — lista de conjuntos de raíces
+            tripletas_vivas — [[(raiz, signo) x3]]
+            paridades — [[(raiz, signo), ...]] con soporte 3 o 4
+            terminos — {raiz: coeficiente} del objetivo
+    Output: lista de diccionarios, uno por componente:
+            {"raices", "tripletas", "paridades", "terminos"}
+
+    Cada componente se resuelve por separado. Toda restricción debe caer
+    entera dentro de una componente: si tuviera raíces de dos componentes
+    distintas, la descomposición sería incorrecta y los resultados,
+    también. De ahí los assert.
+    """
+    de_quien = {}
+    for k, comp in enumerate(comps):
+        for r in comp:
+            de_quien[r] = k
+
+    datos = [{"raices": set(comp), "tripletas": [], "paridades": [],
+              "terminos": {}} for comp in comps]
+
+    def componente_de(lits, que):
+        ks = {de_quien[r] for r, _ in lits}
+        assert len(ks) == 1, (
+            f"{que} cruza {len(ks)} componentes: {lits}")
+        return ks.pop()
+
+    for lits in tripletas_vivas:
+        datos[componente_de(lits, "tripleta")]["tripletas"].append(lits)
+
+    for lits in paridades:
+        datos[componente_de(lits, "paridad")]["paridades"].append(lits)
+
+    for raiz, coef in terminos.items():
+        assert raiz in de_quien, f"término sobre una raíz inexistente: {raiz}"
+        datos[de_quien[raiz]]["terminos"][raiz] = coef
+
+    return datos
+
+
+def blb_a_igualdades(blb, pares):
+    """
+    Input:  blb — [((par1, s1), (par2, s2))] de restricciones_blb()
+            pares — lista de (f,g), para traducir a índices
+    Output: [(i1, s1, i2, s2)] con el mismo formato que usa reduce()
+
+    BLB dice m_e1 != m_e2, y el formato de igualdades significa X_1 = X_2.
+    Para expresar la desigualdad se COMPLEMENTA uno de los dos signos:
+        m_e1 != m_e2   <=>   X_1 = 1 - X_2
+    """
+    idx = {par: i for i, par in enumerate(pares)}
+    salida = []
+    for ((u1, v1), s_o1), ((u2, v2), s_o2) in blb:
+        i1, s_p1 = indice_literal(idx, u1, v1)
+        i2, s_p2 = indice_literal(idx, u2, v2)
+        salida.append((i1, s_p1 ^ s_o1, i2, (s_p2 ^ s_o2) ^ 1))
+    return salida
 
