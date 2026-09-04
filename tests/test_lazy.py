@@ -150,3 +150,7 @@ def test_sin_tripletas_colgadas_falla():
     añade_restricciones(m, x, ind, trip, cr, tt, tto, oo)
     with pytest.raises(AssertionError):
         resuelve_con_lazy(m)
+        
+# Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"
+
+        

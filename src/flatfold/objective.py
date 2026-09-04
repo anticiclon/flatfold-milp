@@ -138,3 +138,55 @@ def restricciones_blb(G, fi, iso, dic_aristas, idx_exterior, etiquetas):
     return salida
 
 
+def restricciones_maekawa(G, fi, iso, dic_aristas, idx_exterior, etiquetas):
+    """
+    Input:  el grafo, el FoldInput, las isometrías, las adyacencias,
+            el índice de la cara exterior y las etiquetas de etiquetas_mv.
+    Output: lista de listas de literales, una por vértice aplicable:
+            [[((u,v), s), ...]]
+
+    Teorema de Maekawa: en un vértice interior de un patrón plegable
+    plano, la diferencia entre el número de montes y el de valles es
+    exactamente 2.
+
+    Solo se emiten los vértices cuyas aristas interiores sean TODAS
+    pliegues: una arista plana no es ni monte ni valle, y la condición
+    no aplica en esa forma. (Ahora apenas hay aristas planas, pero con
+    la subdivisión convexa aparecerán.)
+
+    Es una restricción implicada (Corolario 11.4): no cambia el conjunto
+    de soluciones. Su interés es la poda del árbol de búsqueda.
+    """
+    from flatfold.pattern import vecinos_ordenados
+    from flatfold.validate import vertices_interiores
+
+    vecinos = vecinos_ordenados(G)
+
+    num_arista = {}
+    for i, (u, v) in enumerate(fi.aristas):
+        num_arista[(u, v) if u < v else (v, u)] = i
+
+    salida = []
+    for v in vertices_interiores(G):
+        ws = vecinos[v]
+        if any(G[v][w]["tipo"] != Kind.CREASE for w in ws):
+            continue                      # hay aristas planas: no aplica
+
+        lits = []
+        for w in ws:
+            e = num_arista[(v, w) if v < w else (w, v)]
+            if e not in etiquetas:
+                lits = None
+                break
+            lits.append(etiquetas[e])
+        if lits is None:
+            continue
+
+        assert len(lits) % 2 == 0, (
+            f"vértice {v}: grado impar ({len(lits)} pliegues), "
+            "viola Maekawa por conteo")
+        salida.append(lits)
+
+    return salida
+
+

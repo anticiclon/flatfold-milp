@@ -104,8 +104,9 @@ def añade_igualdades(m, x, pares_de_pares):
 
 def añade_restricciones(m, x, indice_pares, tripletas, cruces, taco_taco,
                         taco_tortilla, tortilla_tortilla, blb=None,
-                        con_transitividad=True, con_cruces=True,
-                        con_colineales=True, con_blb=False,
+                        maekawa=None, con_transitividad=True,
+                        con_cruces=True, con_colineales=True,
+                        con_blb=False, con_maekawa=False,
                         facetas_paridad_flag=False,
                         transitividad_lazy=False):
     """
@@ -132,6 +133,8 @@ def añade_restricciones(m, x, indice_pares, tripletas, cruces, taco_taco,
         añade_igualdades(m, x, tortilla_tortilla)
     if con_blb and blb:
         añade_blb(m, x, indice_pares, blb)
+    if con_maekawa and maekawa:
+        añade_maekawa(m, x, maekawa)
 
         
     
@@ -500,6 +503,29 @@ def resuelve_con_lazy(m):
     m.Params.LazyConstraints = 1
     m.optimize(callback_lazy)
     return m
+
+def añade_maekawa(m, x, maekawa):
+    """
+    Teorema de Maekawa: en cada vértice interior, |M - V| = 2.
+
+    Con m_e = 1 para monte y 0 para valle, la suma de (2*m_e - 1) sobre
+    los pliegues del vértice vale M - V. Y 4*s - 2 vale -2 o +2 según la
+    binaria auxiliar s, de modo que la igualdad
+
+        sum_e (2*m_e - 1) = 4*s_v - 2
+
+    dice exactamente que la diferencia es 2 en valor absoluto.
+
+    Es la única de las cuatro variantes que añade variables: una binaria
+    por vértice. No es afín sobre F2, así que no puede alimentar el
+    presolve.
+    """
+    for lits in maekawa:
+        s = m.addVar(vtype=gb.GRB.BINARY)
+        suma = gb.quicksum(
+            2 * (literal(x, u, v) if sg == 0 else 1 - literal(x, u, v)) - 1
+            for (u, v), sg in lits)
+        m.addConstr(suma == 4 * s - 2)
 
 
 # def main():
