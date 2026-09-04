@@ -3,6 +3,7 @@ import gurobipy as gb
 from collections import defaultdict
 from flatfold.pattern import aristas_caras
 from flatfold.incidences import cruces, tripletas, colineales
+from itertools import combinations
 
 
 
@@ -59,12 +60,38 @@ def añade_cruces(m, x, cruces):
         m.addConstr(literal(x, f, t) == literal(x, g, t))
 
 
-def añade_taco_taco(m, x, taco_taco):
-    """Dos pliegues colineales que abren al mismo lado no pueden
-    entrelazarse: un número par de los cuatro literales vale 1."""
+# def añade_taco_taco(m, x, taco_taco):
+#     """Dos pliegues colineales que abren al mismo lado no pueden
+#     entrelazarse: un número par de los cuatro literales vale 1."""
+#     for cuatro in taco_taco:
+#         k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=2)
+#         m.addConstr(gb.quicksum(literal(x, u, v) for u, v in cuatro) == 2 * k)
+
+
+def añade_taco_taco(m, x, taco_taco, facetas=False):
+    """
+    Dos pliegues colineales que abren al mismo lado no pueden
+    entrelazarse: un número par de los cuatro literales vale 1.
+
+    Dos formulaciones equivalentes en los puntos enteros:
+      - con variable de acarreo: sum X_i = 2k, una restricción y una
+        variable entera;
+      - con las facetas del politopo de paridad: 2^(n-1) desigualdades
+        sin variables nuevas, y relajación lineal estrictamente más
+        fuerte.
+    """
     for cuatro in taco_taco:
-        k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=2)
-        m.addConstr(gb.quicksum(literal(x, u, v) for u, v in cuatro) == 2 * k)
+        if not facetas:
+            k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=len(cuatro) // 2)
+            m.addConstr(gb.quicksum(literal(x, u, v)
+                                    for u, v in cuatro) == 2 * k)
+            continue
+
+        for S in facetas_paridad(len(cuatro)):
+            m.addConstr(
+                gb.quicksum(
+                    (1 - literal(x, u, v)) if i in S else literal(x, u, v)
+                    for i, (u, v) in enumerate(cuatro)) >= 1)
 
 
 def añade_igualdades(m, x, pares_de_pares):
@@ -78,22 +105,34 @@ def añade_igualdades(m, x, pares_de_pares):
 def añade_restricciones(m, x, indice_pares, tripletas, cruces, taco_taco,
                         taco_tortilla, tortilla_tortilla, blb=None,
                         con_transitividad=True, con_cruces=True,
-                        con_colineales=True, con_blb=False):
+                        con_colineales=True, con_blb=False,
+                        facetas_paridad_flag=False,
+                        transitividad_lazy=False):
     """
     Añade las cinco familias al modelo. Las banderas permiten activarlas
     por separado, que es lo que hace falta para medir el efecto de cada una.
+
+    Con transitividad_lazy, las tripletas NO se escriben: se cuelgan del
+    modelo para que callback_lazy las separe cuando haga falta. Quien
+    llame debe entonces poner m.Params.LazyConstraints = 1 y optimizar
+    con m.optimize(callback_lazy).
     """
     if con_transitividad:
-        añade_transitividad(m, x, tripletas)
+        if transitividad_lazy:
+            m._x = x
+            m._tripletas = tripletas
+            m._n_lazy = 0
+        else:
+            añade_transitividad(m, x, tripletas)
     if con_cruces:
         añade_cruces(m, x, cruces)
     if con_colineales:
-        añade_taco_taco(m, x, taco_taco)
+        añade_taco_taco(m, x, taco_taco, facetas=facetas_paridad_flag)
         añade_igualdades(m, x, taco_tortilla)
         añade_igualdades(m, x, tortilla_tortilla)
     if con_blb and blb:
         añade_blb(m, x, indice_pares, blb)
-        
+
         
     
 def resuelve(m, x, tiempo_limite=None, semilla=0, silencioso=True):
@@ -223,7 +262,8 @@ def analiza(ruta):
 
 
 
-def construye_reducido(datos, nombre="componente", minimizar=False):
+def construye_reducido(datos, nombre="componente", minimizar=False,
+                       facetas=False):
     """
     Input:  datos — un diccionario de reparte_por_componentes:
                     {"raices", "tripletas", "paridades", "terminos"}
@@ -246,10 +286,20 @@ def construye_reducido(datos, nombre="componente", minimizar=False):
         m.addConstr(s >= 1)
         m.addConstr(s <= 2)
 
+    # for lits in datos["paridades"]:
+    #     n = len(lits)
+    #     k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=n // 2)
+    #     m.addConstr(gb.quicksum(lit(r, s) for r, s in lits) == 2 * k)
     for lits in datos["paridades"]:
-        n = len(lits)
-        k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=n // 2)
-        m.addConstr(gb.quicksum(lit(r, s) for r, s in lits) == 2 * k)
+        if facetas:
+            for S in facetas_paridad(len(lits)):
+                m.addConstr(
+                    gb.quicksum((1 - lit(r, s)) if i in S else lit(r, s)
+                                for i, (r, s) in enumerate(lits)) >= 1)
+        else:
+            n = len(lits)
+            k = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=n // 2)
+            m.addConstr(gb.quicksum(lit(r, s) for r, s in lits) == 2 * k)
 
     if minimizar and datos["terminos"]:
         m.setObjective(
@@ -266,7 +316,7 @@ def construye_reducido(datos, nombre="componente", minimizar=False):
 #                              limite_pool=10**7, tiempo=None, silencioso=True):
 def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
                              limite_pool=10**7, tiempo=None, silencioso=True,
-                             presolve_gurobi=-1):
+                             presolve_gurobi=-1, facetas=False):
     """
     Input:  datos_comps — lista de reparte_por_componentes()
             constante — el término independiente de energia_reducida()
@@ -288,7 +338,8 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
 
     for k, datos in enumerate(datos_comps):
         m, beta = construye_reducido(datos, f"comp{k}",
-                                     minimizar=(modo == "optimizacion"))
+                                     minimizar=(modo == "optimizacion"),
+                                     facetas=facetas)
         if silencioso:
             m.Params.OutputFlag = 0
         if tiempo is not None:
@@ -360,6 +411,95 @@ def añade_blb(m, x, indice_pares, blb):
         if s2:
             l2 = 1 - l2
         m.addConstr(l1 == 1 - l2)
+        
+        
+        
+        
+
+
+def facetas_paridad(n):
+    """
+    Input:  n — número de literales de la restricción de paridad.
+    Output: lista de tuplas con los índices de cada subconjunto de
+            cardinal impar.
+
+    La envoltura convexa de los puntos de {0,1}^n con paridad par se
+    describe exactamente con una desigualdad por cada subconjunto S de
+    cardinal impar:
+
+        sum_{i en S} (1 - X_i)  +  sum_{i fuera de S} X_i  >=  1
+
+    Cada una excluye el punto en que los de S valen 1 y el resto 0, que
+    son justamente los 2^(n-1) puntos de paridad impar.
+
+    Son facetas del politopo, así que la relajación lineal es la
+    envoltura convexa exacta: más fuerte que la formulación con variable
+    de acarreo, y sin variables añadidas.
+    """
+    return [s for k in range(1, n + 1, 2)
+            for s in combinations(range(n), k)]
+        
+
+
+def separa_tripletas(valores, tripletas, tol=1e-6):
+    """
+    Input:  valores — {(f,g): valor} de la solución candidata
+            tripletas — [(f,g,h)]
+    Output: la lista de tripletas violadas.
+
+    La condición es 1 <= X_fg + X_gh + X_hf <= 2: los tres literales no
+    pueden valer lo mismo. Se viola cuando la suma es 0 o 3, es decir
+    cuando las tres comparaciones forman un ciclo.
+
+    Es lógica pura, sin Gurobi: el callback solo la envuelve, y así se
+    puede probar con valores puestos a mano.
+    """
+    def X(u, v):
+        return valores[(u, v)] if u < v else 1 - valores[(v, u)]
+
+    violadas = []
+    for f, g, h in tripletas:
+        s = X(f, g) + X(g, h) + X(h, f)
+        if s < 1 - tol or s > 2 + tol:
+            violadas.append((f, g, h))
+    return violadas
+        
+
+def callback_lazy(m, where):
+    """
+    Callback de separación para la transitividad.
+
+    Se invoca con (modelo, punto del algoritmo). En MIPSOL Gurobi ha
+    encontrado una solución entera candidata: se obtienen sus valores con
+    cbGetSolution, se buscan las tripletas violadas y se añaden con
+    cbLazy.
+
+    Los datos que necesita se cuelgan del modelo antes de optimizar:
+        m._x          el diccionario de variables
+        m._tripletas  la lista de (f,g,h)
+        m._n_lazy     contador de restricciones añadidas
+
+    Requiere m.Params.LazyConstraints = 1.
+    """
+    if where != gb.GRB.Callback.MIPSOL:
+        return
+
+    valores = {par: v for par, v in
+               zip(m._x.keys(), m.cbGetSolution(list(m._x.values())))}
+
+    for f, g, h in separa_tripletas(valores, m._tripletas):
+        s = (literal(m._x, f, g) + literal(m._x, g, h) + literal(m._x, h, f))
+        m.cbLazy(s >= 1)
+        m.cbLazy(s <= 2)
+        m._n_lazy += 2
+        
+        
+def resuelve_con_lazy(m):
+    """Optimiza con separación perezosa, poniendo el parámetro obligatorio."""
+    assert hasattr(m, "_tripletas"), "el modelo no tiene tripletas colgadas"
+    m.Params.LazyConstraints = 1
+    m.optimize(callback_lazy)
+    return m
 
 
 # def main():

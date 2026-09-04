@@ -3,7 +3,8 @@ import pytest
 from pathlib import Path
 
 from flatfold.model import (construye_modelo, literal, resuelve,
-                            orden_de_capas, añade_restricciones, analiza)
+                            orden_de_capas, añade_restricciones, analiza, 
+                            separa_tripletas)
 
 TOY = Path(__file__).resolve().parent.parent / "instances" / "toy"
 
@@ -219,6 +220,53 @@ def test_la_cadena_produce_solucion():
         estado, valores = resuelve(m, x)
         assert valores is not None
         
+def test_separa_detecta_el_ciclo():
+    """f encima de g, g encima de h, h encima de f: imposible."""
+    valores = {(0, 1): 1, (1, 2): 1, (0, 2): 0}
+    # X(0,1)=1, X(1,2)=1, X(2,0)=1-X(0,2)=1  -> suma 3
+    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
+
+
+def test_separa_acepta_orden_total():
+    valores = {(0, 1): 1, (1, 2): 1, (0, 2): 1}
+    # X(0,1)=1, X(1,2)=1, X(2,0)=0  -> suma 2
+    assert separa_tripletas(valores, [(0, 1, 2)]) == []
+
+
+def test_separa_tolera_flotantes():
+    valores = {(0, 1): 0.9999999, (1, 2): 1.0, (0, 2): 1e-9}
+    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
+    
+    
+def test_separa_detecta_el_ciclo():
+    """f encima de g, g encima de h, h encima de f: imposible."""
+    valores = {(0, 1): 1, (1, 2): 1, (0, 2): 0}
+    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
+
+
+def test_separa_detecta_el_ciclo_inverso():
+    valores = {(0, 1): 0, (1, 2): 0, (0, 2): 1}
+    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
+
+
+def test_separa_acepta_los_ordenes_totales():
+    """De las 8 asignaciones, 6 son órdenes totales y no se separan."""
+    from itertools import product
+    n_violadas = 0
+    for a, b, c in product((0, 1), repeat=3):
+        valores = {(0, 1): a, (1, 2): b, (0, 2): c}
+        if separa_tripletas(valores, [(0, 1, 2)]):
+            n_violadas += 1
+    assert n_violadas == 2          # los dos ciclos
+
+
+def test_separa_tolera_flotantes():
+    valores = {(0, 1): 0.9999999, (1, 2): 1.0, (0, 2): 1e-9}
+    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
+
+
+def test_separa_lista_vacia():
+    assert separa_tripletas({}, []) == []
         
         
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"
