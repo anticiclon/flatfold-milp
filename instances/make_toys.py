@@ -44,12 +44,26 @@ def mapa_1xn_MM(n):
     return p
 
 
+def dos_eles():
+    """Dos caras no convexas adyacentes: prueba la subdivisión."""
+    return {"file_spec": 1.1,
+            "vertices_coords": [[0,0],[2,0],[2,1],[1,1],[1,2],[0,2],
+                                [4,0],[4,2],[3,2],[3,1]],
+            "edges_vertices": [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],
+                               [1,6],[6,7],[7,8],[8,9],[9,2]],
+            "edges_assignment": ["B","M","B","B","B","B",
+                                 "B","B","B","B","B"]}
+
+
+
 def main():
     print("Generando instancias de juguete...")
     for n in range(2, 9):
         escribe(f"map_1x{n}", mapa_1xn(n))
     
     escribe("map_1x3_MM", mapa_1xn_MM(3))
+    
+    escribe("dos_eles", dos_eles())
 
 
 
