@@ -5,12 +5,14 @@ Created on Wed Sep  2 11:16:30 2026
 @author: Trabajador
 """
 
-from flatfold.exact import  sigma
+from flatfold.exact import sigma
 from flatfold.io_fold import Kind
-from flatfold.model import literal
-from flatfold.pattern import vecinos_ordenados
+from flatfold.model import literal, analiza_completo
+from flatfold.pattern import vecinos_ordenados, aristas_caras
 from flatfold.validate import (vertices_interiores, sectores,
                                    minimos_locales)
+from flatfold.incidences import cruces, tripletas, colineales
+
 
 
 def etiquetas_mv(G, fi, iso, dic_aristas, idx_exterior):
@@ -51,6 +53,61 @@ def etiquetas_mv(G, fi, iso, dic_aristas, idx_exterior):
         etiquetas[indice[(u, v)]] = (par, s)
 
     return etiquetas
+
+def analiza(ruta, subdividir=True):
+    """
+    Tubería completa: de fichero FOLD a datos del modelo.
+    Devuelve (pares, tripletas, cruces, taco_taco, taco_tortilla,
+              tortilla_tortilla).
+
+    Con subdividir=True, las caras no convexas se parten en trapecios
+    (Lema 6.4) y toda la topología se rehace sobre el patrón resultante.
+    Con False, se rechaza el patrón: sirve para medir el efecto de la
+    subdivisión.
+    """
+    from flatfold.io_fold import read_fold
+    from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+                                  caras_definitivas, grafo_dual, plegar,
+                                  cara_plegada, verifica_consistencia)
+    from flatfold.validate import valida_pendientes, valida_kawasaki
+    from flatfold.subdivision import necesita_subdivision, subdivide_vertical
+    from flatfold.incidences import pares_comparables
+
+    fi = read_fold(ruta)
+    valida_pendientes(fi)
+    G = crea_grafo_dirigido(fi)
+    valida_kawasaki(G)
+    caras = caras_grafo(G)
+    _, exterior = caras_definitivas(G, caras)
+    idx_ext = caras.index(exterior)
+
+    no_convexas = necesita_subdivision(G, caras, idx_ext)
+    if no_convexas:
+        if not subdividir:
+            raise ValueError(f"caras no convexas: {no_convexas}")
+        fi, _ = subdivide_vertical(fi, G, caras, idx_ext)
+        G = crea_grafo_dirigido(fi)
+        valida_kawasaki(G)          # los vértices nuevos deben cerrar
+        caras = caras_grafo(G)
+        _, exterior = caras_definitivas(G, caras)
+        idx_ext = caras.index(exterior)
+        assert not necesita_subdivision(G, caras, idx_ext)
+
+    dual = grafo_dual(G, caras, idx_ext)
+    dic_aristas = aristas_caras(G, caras)
+    if len(dual) == 0:
+        return [], [], [], [], [], []
+
+    iso = plegar(G, dual, min(dual.nodes))
+    verifica_consistencia(G, dual, iso)
+    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+
+    pares = pares_comparables(plegadas)
+    trip = tripletas(plegadas, pares)
+    cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
+    tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
+    return pares, trip, cr, tt, tto, oo
+
 
 def fija_etiquetas(m, x, etiquetas, prescritas):
     """
@@ -189,4 +246,47 @@ def restricciones_maekawa(G, fi, iso, dic_aristas, idx_exterior, etiquetas):
 
     return salida
 
+def etiquetas_por_pliegue_original(etiquetas, representantes):
+    """
+    Input:  etiquetas — {arista_actual: (par, signo)}, de etiquetas_mv
+                        sobre el patrón (subdividido o no)
+            representantes — {arista_del_fichero: arista_actual}
+    Output: {arista_del_fichero: (par, signo)}
 
+    La energía se define sobre los pliegues del fichero, donde viven la
+    asignación objetivo y los pesos. Tras subdividir, un pliegue puede
+    estar partido en varios trozos; se toma la etiqueta de su
+    representante.
+
+    Es correcto porque la familia de cruces obliga a que todos los
+    trozos de un mismo pliegue reciban la misma etiqueta (véase
+    comprueba_trozos_coinciden, que lo verifica sobre la solución).
+
+    Sin subdividir, representantes es la identidad y esto no cambia nada.
+    """
+    salida = {}
+    for original, actual in representantes.items():
+        if actual in etiquetas:
+            salida[original] = etiquetas[actual]
+    return salida
+
+def comprueba_trozos_coinciden(valores, etiquetas, origen):
+    """
+    Sobre una solución, todos los trozos de un mismo pliegue deben tener
+    la misma etiqueta. Lo garantiza la familia de cruces; comprobarlo es
+    un test independiente de que esa familia se generó bien.
+    """
+    from collections import defaultdict
+    por_origen = defaultdict(set)
+    for arista, ((u, v), s) in etiquetas.items():
+        o = origen.get(arista)
+        if o is None:
+            continue
+        x = valores[(u, v)]
+        por_origen[o].add(x ^ s)
+
+    malos = {o: vals for o, vals in por_origen.items() if len(vals) > 1}
+    if malos:
+        raise ValueError(f"trozos con etiquetas distintas: {malos}")
+        
+        

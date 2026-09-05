@@ -9,17 +9,15 @@ variantes, añade una variable binaria por vértice.
 import pytest
 from pathlib import Path
 
-import gurobipy as gb
-from flatfold.io_fold import read_fold, Kind
-from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                              caras_definitivas, grafo_dual, plegar,
-                              cara_plegada, aristas_caras, vecinos_ordenados)
-from flatfold.incidences import (pares_comparables, tripletas, cruces,
-                                 colineales)
+# import gurobipy as gb
+from flatfold.io_fold import Kind
+from flatfold.pattern import vecinos_ordenados
 from flatfold.validate import vertices_interiores
 from flatfold.objective import (etiquetas_mv, restricciones_maekawa,
                                 fija_etiquetas)
-from flatfold.model import construye_modelo, añade_restricciones
+from flatfold.model import (construye_modelo, 
+                            añade_restricciones, 
+                            analiza_completo)
 
 RAIZ = Path(__file__).resolve().parent.parent
 TOY = RAIZ / "instances" / "toy"
@@ -29,24 +27,31 @@ PEQUEÑA = GRIDS / "004_brown_3x3_A3.fold"
 ESTADOS_PEQUEÑA = 13122
 
 
+# def monta(ruta):
+#     fi = read_fold(ruta)
+#     G = crea_grafo_dirigido(fi)
+#     caras = caras_grafo(G)
+#     _, ext = caras_definitivas(G, caras)
+#     idx = caras.index(ext)
+#     dual = grafo_dual(G, caras, idx)
+#     dic = aristas_caras(G, caras)
+#     iso = plegar(G, dual, min(dual.nodes))
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#     pares = pares_comparables(plegadas)
+#     trip = tripletas(plegadas, pares)
+#     cr = cruces(G, caras, plegadas, iso, dic, idx)
+#     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
+#     etiq = etiquetas_mv(G, fi, iso, dic, idx)
+#     mk = restricciones_maekawa(G, fi, iso, dic, idx, etiq)
+#     return dict(fi=fi, G=G, pares=pares, trip=trip, cr=cr, tt=tt,
+#                 tto=tto, oo=oo, etiq=etiq, mk=mk)
 def monta(ruta):
-    fi = read_fold(ruta)
-    G = crea_grafo_dirigido(fi)
-    caras = caras_grafo(G)
-    _, ext = caras_definitivas(G, caras)
-    idx = caras.index(ext)
-    dual = grafo_dual(G, caras, idx)
-    dic = aristas_caras(G, caras)
-    iso = plegar(G, dual, min(dual.nodes))
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-    pares = pares_comparables(plegadas)
-    trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic, idx)
-    tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
-    etiq = etiquetas_mv(G, fi, iso, dic, idx)
-    mk = restricciones_maekawa(G, fi, iso, dic, idx, etiq)
-    return dict(fi=fi, G=G, pares=pares, trip=trip, cr=cr, tt=tt,
-                tto=tto, oo=oo, etiq=etiq, mk=mk)
+    a = analiza_completo(ruta)
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    mk = restricciones_maekawa(a.G, a.fi, a.iso, a.dic_aristas,
+                               a.idx_ext, etiq)
+    return dict(fi=a.fi, G=a.G, pares=a.pares, trip=a.trip, cr=a.cr,
+                tt=a.tt, tto=a.tto, oo=a.oo, etiq=etiq, mk=mk)
 
 
 def construye(d, con_maekawa):

@@ -8,14 +8,15 @@ falta de verdad.
 """
 from pathlib import Path
 
-from flatfold.io_fold import read_fold
-from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                              caras_definitivas, grafo_dual, plegar,
-                              cara_plegada, aristas_caras)
-from flatfold.incidences import (pares_comparables, tripletas, cruces,
-                                 colineales)
+# from flatfold.io_fold import read_fold
+# from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+#                               caras_definitivas, grafo_dual, plegar,
+#                               cara_plegada, aristas_caras)
+# from flatfold.incidences import (pares_comparables, tripletas, cruces,
+#                                  colineales)
 from flatfold.model import (construye_modelo, añade_restricciones,
-                            resuelve_con_lazy, separa_tripletas)
+                            resuelve_con_lazy, separa_tripletas,
+                            analiza_completo)
 
 RAIZ = Path(__file__).resolve().parent.parent
 TOY = RAIZ / "instances" / "toy"
@@ -27,21 +28,24 @@ INSTANCIAS = [TOY / "waterbomb4.fold",
               GRIDS / "182_brown_4x4_C41.fold"]
 
 
+# def monta(ruta):
+#     fi = read_fold(ruta)
+#     G = crea_grafo_dirigido(fi)
+#     caras = caras_grafo(G)
+#     _, ext = caras_definitivas(G, caras)
+#     idx = caras.index(ext)
+#     dual = grafo_dual(G, caras, idx)
+#     dic = aristas_caras(G, caras)
+#     iso = plegar(G, dual, min(dual.nodes))
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#     pares = pares_comparables(plegadas)
+#     trip = tripletas(plegadas, pares)
+#     cr = cruces(G, caras, plegadas, iso, dic, idx)
+#     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
+#     return pares, trip, cr, tt, tto, oo
 def monta(ruta):
-    fi = read_fold(ruta)
-    G = crea_grafo_dirigido(fi)
-    caras = caras_grafo(G)
-    _, ext = caras_definitivas(G, caras)
-    idx = caras.index(ext)
-    dual = grafo_dual(G, caras, idx)
-    dic = aristas_caras(G, caras)
-    iso = plegar(G, dual, min(dual.nodes))
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-    pares = pares_comparables(plegadas)
-    trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic, idx)
-    tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
-    return pares, trip, cr, tt, tto, oo
+    a = analiza_completo(ruta)
+    return a.pares, a.trip, a.cr, a.tt, a.tto, a.oo
 
 
 def prueba(ruta):

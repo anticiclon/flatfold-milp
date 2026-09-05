@@ -14,15 +14,16 @@ import csv
 from pathlib import Path
 
 import gurobipy as gb
-from flatfold.io_fold import read_fold
-from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                              caras_definitivas, grafo_dual, plegar,
-                              cara_plegada, aristas_caras)
-from flatfold.incidences import (pares_comparables, tripletas, cruces,
-                                 colineales)
+# from flatfold.io_fold import read_fold
+# from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+#                               caras_definitivas, grafo_dual, plegar,
+#                               cara_plegada, aristas_caras)
+# from flatfold.incidences import (pares_comparables, tripletas, cruces,
+#                                  colineales)
 from flatfold.objective import etiquetas_mv, energia
 from flatfold.model import (construye_modelo, añade_restricciones,
-                            resuelve_por_componentes)
+                            resuelve_por_componentes,
+                            analiza_completo)
 from flatfold.presolve import (literales_a_ecuaciones, reduce_completo,
                                componentes, energia_reducida,
                                reparte_por_componentes, Infactible)
@@ -51,24 +52,30 @@ SALIDA = RAIZ / "experiments" / f"presolve_{CARPETA}_{MODO}.csv"
 # ---------------------
 
 
+# def geometria(ruta):
+#     fi = read_fold(ruta)
+#     G = crea_grafo_dirigido(fi)
+#     caras = caras_grafo(G)
+#     _, ext = caras_definitivas(G, caras)
+#     idx = caras.index(ext)
+#     dual = grafo_dual(G, caras, idx)
+#     if len(dual) == 0:
+#         return None
+#     dic = aristas_caras(G, caras)
+#     iso = plegar(G, dual, min(dual.nodes))
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#     pares = pares_comparables(plegadas)
+#     trip = tripletas(plegadas, pares)
+#     cr = cruces(G, caras, plegadas, iso, dic, idx)
+#     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
+#     etiq = etiquetas_mv(G, fi, iso, dic, idx)
+#     return fi, pares, trip, cr, tt, tto, oo, etiq
 def geometria(ruta):
-    fi = read_fold(ruta)
-    G = crea_grafo_dirigido(fi)
-    caras = caras_grafo(G)
-    _, ext = caras_definitivas(G, caras)
-    idx = caras.index(ext)
-    dual = grafo_dual(G, caras, idx)
-    if len(dual) == 0:
+    a = analiza_completo(ruta)
+    if not a.pares:
         return None
-    dic = aristas_caras(G, caras)
-    iso = plegar(G, dual, min(dual.nodes))
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-    pares = pares_comparables(plegadas)
-    trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic, idx)
-    tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
-    etiq = etiquetas_mv(G, fi, iso, dic, idx)
-    return fi, pares, trip, cr, tt, tto, oo, etiq
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    return a.fi, a.pares, a.trip, a.cr, a.tt, a.tto, a.oo, etiq
 
 
 def sin_presolve(fi, pares, trip, cr, tt, tto, oo, etiq):

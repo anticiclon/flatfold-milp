@@ -334,3 +334,50 @@ def subdivide_vertical(fi, G, caras, idx_ext):
                       escala=fi.escala)
     return nuevo, origen
 
+
+
+
+def representantes(origen, tipos, fi_original):
+    """
+    Input:  origen — {arista_nueva: arista_original}, de subdivide_vertical
+            tipos — los tipos del patrón subdividido
+            fi_original — el FoldInput antes de subdividir
+    Output: {arista_original: arista_nueva}, un trozo por cada pliegue
+            del fichero.
+
+    La energía se define sobre los pliegues del fichero de entrada, donde
+    viven la asignación objetivo y los pesos. Al subdividir, un pliegue
+    puede quedar partido en varios trozos; se elige uno como
+    representante y su literal es el que entra en el objetivo.
+
+    Basta con uno porque la familia de cruces obliga a que todos los
+    trozos de un mismo pliegue reciban la misma etiqueta. Es una
+    consecuencia del modelo, no una hipótesis: conviene comprobarla sobre
+    la solución en lugar de darla por buena.
+
+    Se descartan las aristas planas nuevas (origen None) y las que no
+    eran pliegues en el patrón de partida.
+    """
+    elegido = {}
+    for nueva, original in sorted(origen.items()):
+        if original is None:
+            continue                          # corte de la subdivisión
+        if fi_original.tipos[original] != Kind.CREASE:
+            continue                          # borde o arista plana
+        if tipos[nueva] != Kind.CREASE:
+            continue                          # no debería pasar
+        elegido.setdefault(original, nueva)
+    return elegido
+
+
+
+
+
+
+
+
+
+
+
+
+

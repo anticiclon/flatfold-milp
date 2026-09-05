@@ -2,12 +2,13 @@
 import pytest
 from pathlib import Path
 
-from flatfold.io_fold import read_fold
-from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                              caras_definitivas, grafo_dual, plegar,
-                              cara_plegada, aristas_caras)
+# from flatfold.io_fold import read_fold
+# from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+                              # caras_definitivas, grafo_dual, plegar,
+                              # cara_plegada, aristas_caras)
 from flatfold.incidences import (pares_comparables, tripletas, cruces,
                                  colineales)
+from flatfold.model import analiza_completo
 
 TOY = Path(__file__).resolve().parent.parent / "instances" / "toy"
 
@@ -20,21 +21,24 @@ RUTAS = {
 }
 
 
-def monta(nombre):
-    """Devuelve todo lo que consumen las funciones de incidencias."""
-    fi = read_fold(RUTAS[nombre])
-    G = crea_grafo_dirigido(fi)
-    caras = caras_grafo(G)
-    _, exterior = caras_definitivas(G, caras)
-    idx_ext = caras.index(exterior)
-    dual = grafo_dual(G, caras, idx_ext)
-    dic = aristas_caras(G, caras)
-    if len(dual) == 0:
-        return G, caras, {}, {}, dic, idx_ext
-    iso = plegar(G, dual, min(dual.nodes))
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-    return G, caras, plegadas, iso, dic, idx_ext
 
+# def monta(nombre):
+#     """Devuelve todo lo que consumen las funciones de incidencias."""
+#     fi = read_fold(RUTAS[nombre])
+#     G = crea_grafo_dirigido(fi)
+#     caras = caras_grafo(G)
+#     _, exterior = caras_definitivas(G, caras)
+#     idx_ext = caras.index(exterior)
+#     dual = grafo_dual(G, caras, idx_ext)
+#     dic = aristas_caras(G, caras)
+#     if len(dual) == 0:
+#         return G, caras, {}, {}, dic, idx_ext
+#     iso = plegar(G, dual, min(dual.nodes))
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#     return G, caras, plegadas, iso, dic, idx_ext
+def monta(nombre):
+    a = analiza_completo(RUTAS[nombre])
+    return a.G, a.caras, a.plegadas, a.iso, a.dic_aristas, a.idx_ext
 
 # --- pares comparables -----------------------------------------------------
 

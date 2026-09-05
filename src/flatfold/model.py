@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
 import gurobipy as gb
+from dataclasses import dataclass
 from collections import defaultdict
-from flatfold.pattern import aristas_caras
-from flatfold.incidences import cruces, tripletas, colineales
 from itertools import combinations
+from flatfold.incidences import cruces, tripletas, colineales, pares_comparables
+
+from flatfold.io_fold import read_fold
+from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+                                  caras_definitivas, grafo_dual, plegar,
+                                  cara_plegada, verifica_consistencia,
+                                  aristas_caras)
+from flatfold.validate import valida_pendientes, valida_kawasaki
+from flatfold.subdivision import (necesita_subdivision,
+                                      subdivide_vertical, representantes)
+from flatfold.geometry import es_convexa
+
 
 
 
@@ -220,48 +231,53 @@ def orden_de_capas(pares, valores):
 
 
 
-def analiza(ruta):
-    """
-    Tubería completa: de fichero FOLD a datos del modelo.
-    Devuelve (pares, tripletas, cruces, taco_taco, taco_tortilla,
-              tortilla_tortilla).
-    """
-    from flatfold.io_fold import read_fold
-    from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                                  caras_definitivas, grafo_dual, plegar,
-                                  cara_plegada, verifica_consistencia)
-    from flatfold.validate import valida_pendientes, valida_kawasaki
-    from flatfold.geometry import es_convexa
-    from flatfold.incidences import pares_comparables
+# def analiza(ruta):
+#     """
+#     Tubería completa: de fichero FOLD a datos del modelo.
+#     Devuelve (pares, tripletas, cruces, taco_taco, taco_tortilla,
+#               tortilla_tortilla).
+#     """
+#     # from flatfold.io_fold import read_fold
+#     # from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+#     #                               caras_definitivas, grafo_dual, plegar,
+#     #                               cara_plegada, verifica_consistencia)
+#     # from flatfold.validate import valida_pendientes, valida_kawasaki
+#     # from flatfold.geometry import es_convexa
+#     # from flatfold.incidences import pares_comparables
 
-    fi = read_fold(ruta)
-    valida_pendientes(fi)
+#     fi = read_fold(ruta)
+#     valida_pendientes(fi)
 
-    G = crea_grafo_dirigido(fi)
-    valida_kawasaki(G)
+#     G = crea_grafo_dirigido(fi)
+#     valida_kawasaki(G)
 
-    caras = caras_grafo(G)
-    _, exterior = caras_definitivas(G, caras)
-    idx_ext = caras.index(exterior)
-    dual = grafo_dual(G, caras, idx_ext)
-    dic_aristas = aristas_caras(G, caras)
+#     caras = caras_grafo(G)
+#     _, exterior = caras_definitivas(G, caras)
+#     idx_ext = caras.index(exterior)
+#     dual = grafo_dual(G, caras, idx_ext)
+#     dic_aristas = aristas_caras(G, caras)
 
-    if len(dual) == 0:
-        return [], [], [], [], [], []
+#     if len(dual) == 0:
+#         return [], [], [], [], [], []
 
-    iso = plegar(G, dual, min(dual.nodes))
-    verifica_consistencia(G, dual, iso)
+#     iso = plegar(G, dual, min(dual.nodes))
+#     verifica_consistencia(G, dual, iso)
 
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-    for f, p in plegadas.items():
-        if not es_convexa(p):
-            raise ValueError(f"la cara {f} no es convexa: {p}")
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#     for f, p in plegadas.items():
+#         if not es_convexa(p):
+#             raise ValueError(f"la cara {f} no es convexa: {p}")
 
-    pares = pares_comparables(plegadas)
-    trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
-    tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
-    return pares, trip, cr, tt, tto, oo
+#     pares = pares_comparables(plegadas)
+#     trip = tripletas(plegadas, pares)
+#     cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
+#     tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
+#     return pares, trip, cr, tt, tto, oo
+
+def analiza(ruta, subdividir=True):
+    """Compatibilidad: solo las seis listas."""
+    a = analiza_completo(ruta, subdividir)
+    return a.pares, a.trip, a.cr, a.tt, a.tto, a.oo
 
 
 
@@ -526,6 +542,98 @@ def añade_maekawa(m, x, maekawa):
             2 * (literal(x, u, v) if sg == 0 else 1 - literal(x, u, v)) - 1
             for (u, v), sg in lits)
         m.addConstr(suma == 4 * s - 2)
+        
+        
+# @dataclass(frozen=True)
+# class Analisis:
+#     """Todo lo que produce la cadena, de fichero FOLD a datos del modelo."""
+#     fi: object                  # el FoldInput, subdividido si hizo falta
+#     G: object
+#     caras: list
+#     idx_ext: int
+#     dic_aristas: dict
+#     iso: dict
+#     plegadas: dict
+#     pares: list
+#     trip: list
+#     cr: list
+#     tt: list
+#     tto: list
+#     oo: list
+#     representantes: dict        # {arista_del_fichero: arista_actual}
+#     subdividido: bool
+@dataclass(frozen=True)
+class Analisis:
+    fi: object                  # el FoldInput, subdividido si hizo falta
+    fi_original: object         # el del fichero, antes de subdividir
+    G: object
+    caras: list
+    idx_ext: int
+    dic_aristas: dict
+    iso: dict
+    plegadas: dict
+    pares: list
+    trip: list
+    cr: list
+    tt: list
+    tto: list
+    oo: list
+    origen: dict                # {arista_actual: arista_del_fichero}
+    representantes: dict        # {arista_del_fichero: arista_actual}
+    subdividido: bool
+
+
+def analiza_completo(ruta, subdividir=True):
+    """
+    Como analiza(), pero devuelve toda la cadena en lugar de solo las
+    seis listas de restricciones. Es lo que necesita quien vaya a
+    calcular etiquetas o energía, porque tras subdividir el FoldInput
+    cambia y los índices de arista con él.
+    """
+
+    fi0 = read_fold(ruta)
+    valida_pendientes(fi0)
+    G = crea_grafo_dirigido(fi0)
+    valida_kawasaki(G)
+    caras = caras_grafo(G)
+    _, exterior = caras_definitivas(G, caras)
+    idx_ext = caras.index(exterior)
+
+    fi = fi0
+    subdividido = False
+    origen = {i: i for i in range(len(fi0.aristas))}
+
+    if necesita_subdivision(G, caras, idx_ext):
+        if not subdividir:
+            raise ValueError("hay caras no convexas y subdividir=False")
+        fi, origen = subdivide_vertical(fi0, G, caras, idx_ext)
+        subdividido = True
+        G = crea_grafo_dirigido(fi)
+        valida_kawasaki(G)
+        caras = caras_grafo(G)
+        _, exterior = caras_definitivas(G, caras)
+        idx_ext = caras.index(exterior)
+        assert not necesita_subdivision(G, caras, idx_ext)
+
+    rep = representantes(origen, fi.tipos, fi0)
+    dic_aristas = aristas_caras(G, caras)
+    dual = grafo_dual(G, caras, idx_ext)
+
+    if len(dual) == 0:
+        return Analisis(fi, fi0, G, caras, idx_ext, dic_aristas, {}, {},
+                        [], [], [], [], [], [], origen, rep, subdividido)
+
+    iso = plegar(G, dual, min(dual.nodes))
+    verifica_consistencia(G, dual, iso)
+    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+
+    pares = pares_comparables(plegadas)
+    trip = tripletas(plegadas, pares)
+    cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
+    tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
+
+    return Analisis(fi, fi0, G, caras, idx_ext, dic_aristas, iso, plegadas,
+                    pares, trip, cr, tt, tto, oo, origen, rep, subdividido)
 
 
 # def main():

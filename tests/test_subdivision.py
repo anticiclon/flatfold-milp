@@ -15,6 +15,7 @@ from flatfold.geometry import es_convexa, doble_area_poligono
 from flatfold.io_fold import read_fold, Kind
 from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
                               caras_definitivas)
+from flatfold.model import analiza_completo
 
 
 
@@ -274,6 +275,75 @@ def test_patron_convexo_no_se_toca():
     fi2, origen = subdivide_vertical(fi, G, caras, ext)
     assert fi2 is fi
     assert origen == {i: i for i in range(len(fi.aristas))}
+    
+    
+    
+    
+def test_representantes_uno_por_pliegue():
+    from flatfold.subdivision import representantes
+    from flatfold.io_fold import Kind
 
+    fi = read_fold(TOY / "dos_eles.fold")
+    G, caras, ext = topologia(fi)
+    fi2, origen = subdivide_vertical(fi, G, caras, ext)
+
+    rep = representantes(origen, fi2.tipos, fi)
+    n_pliegues = sum(1 for t in fi.tipos if t == Kind.CREASE)
+    assert len(rep) == n_pliegues
+
+
+def test_representantes_apuntan_a_pliegues():
+    from flatfold.subdivision import representantes
+    from flatfold.io_fold import Kind
+
+    fi = read_fold(TOY / "dos_eles.fold")
+    G, caras, ext = topologia(fi)
+    fi2, origen = subdivide_vertical(fi, G, caras, ext)
+
+    rep = representantes(origen, fi2.tipos, fi)
+    for original, nueva in rep.items():
+        assert fi.tipos[original] == Kind.CREASE
+        assert fi2.tipos[nueva] == Kind.CREASE
+        assert origen[nueva] == original
+
+
+def test_representantes_sin_subdividir_es_la_identidad():
+    """En un patrón convexo cada pliegue es su propio representante."""
+    from flatfold.subdivision import representantes
+    from flatfold.io_fold import Kind
+
+    fi = read_fold(TOY / "waterbomb4.fold")
+    G, caras, ext = topologia(fi)
+    fi2, origen = subdivide_vertical(fi, G, caras, ext)
+
+    rep = representantes(origen, fi2.tipos, fi)
+    assert all(k == v for k, v in rep.items())
+    assert set(rep) == {i for i, t in enumerate(fi.tipos)
+                        if t == Kind.CREASE}
+
+
+def test_los_cortes_no_son_representantes():
+    """Las aristas planas que introduce la subdivisión no vienen de
+    ningún pliegue del fichero."""
+    from flatfold.subdivision import representantes
+
+    fi = read_fold(TOY / "dos_eles.fold")
+    G, caras, ext = topologia(fi)
+    fi2, origen = subdivide_vertical(fi, G, caras, ext)
+
+    rep = representantes(origen, fi2.tipos, fi)
+    cortes = {i for i, o in origen.items() if o is None}
+    assert cortes and not (cortes & set(rep.values()))
+    
+    
+def test_la_subdivision_activa_tortilla_tortilla():
+    """
+    Los cortes de la subdivisión son aristas planas, y dos de ellas
+    colineales generan la familia tortilla-tortilla, que ninguna
+    instancia del conjunto público ejercita.
+    """
+    a = analiza_completo(TOY / "dos_eles.fold")
+    assert a.subdividido
+    assert len(a.oo) == 1
 
 # !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"

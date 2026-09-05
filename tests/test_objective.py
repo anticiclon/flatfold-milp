@@ -1,46 +1,55 @@
 # -*- coding: utf-8 -*-
-import pytest
+# import pytest
 from pathlib import Path
 import gurobipy as gb
 
-from flatfold.io_fold import read_fold, Kind
-from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                              caras_definitivas, grafo_dual, plegar,
-                              cara_plegada, aristas_caras)
-from flatfold.incidences import (pares_comparables, tripletas, cruces,
-                                 colineales)
-from flatfold.model import construye_modelo, añade_restricciones, literal
-from flatfold.objective import etiquetas_mv, fija_etiquetas, energia
+from flatfold.io_fold import Kind
+from flatfold.model import (construye_modelo, 
+                            añade_restricciones, 
+                            analiza_completo)
+from flatfold.objective import (etiquetas_mv, fija_etiquetas, energia,
+                                etiquetas_por_pliegue_original)
 from flatfold.exact import sigma
+
 
 TOY = Path(__file__).resolve().parent.parent / "instances" / "toy"
 
 
+# def prepara(nombre):
+#     """Modelo completo con restricciones, más las etiquetas M/V."""
+#     fi = read_fold(TOY / f"{nombre}.fold")
+#     G = crea_grafo_dirigido(fi)
+#     caras = caras_grafo(G)
+#     _, exterior = caras_definitivas(G, caras)
+#     idx = caras.index(exterior)
+#     dual = grafo_dual(G, caras, idx)
+#     dic = aristas_caras(G, caras)
+#     iso = plegar(G, dual, min(dual.nodes))
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+
+#     pares = pares_comparables(plegadas)
+#     trip = tripletas(plegadas, pares)
+#     cr = cruces(G, caras, plegadas, iso, dic, idx)
+#     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
+
+#     m, x = construye_modelo(pares)
+#     # añade_restricciones(m, x, trip, cr, tt, tto, oo)
+#     indice_pares = {par: i for i, par in enumerate(pares)}
+#     añade_restricciones(m, x, indice_pares, trip, cr, tt, tto, oo)
+#     m.Params.OutputFlag = 0
+
+#     etiq = etiquetas_mv(G, fi, iso, dic, idx)
+#     return fi, G, iso, dic, idx, m, x, etiq
+
 def prepara(nombre):
     """Modelo completo con restricciones, más las etiquetas M/V."""
-    fi = read_fold(TOY / f"{nombre}.fold")
-    G = crea_grafo_dirigido(fi)
-    caras = caras_grafo(G)
-    _, exterior = caras_definitivas(G, caras)
-    idx = caras.index(exterior)
-    dual = grafo_dual(G, caras, idx)
-    dic = aristas_caras(G, caras)
-    iso = plegar(G, dual, min(dual.nodes))
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-
-    pares = pares_comparables(plegadas)
-    trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic, idx)
-    tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
-
-    m, x = construye_modelo(pares)
-    # añade_restricciones(m, x, trip, cr, tt, tto, oo)
-    indice_pares = {par: i for i, par in enumerate(pares)}
-    añade_restricciones(m, x, indice_pares, trip, cr, tt, tto, oo)
+    a = analiza_completo(TOY / f"{nombre}.fold")
+    m, x = construye_modelo(a.pares)
+    indice_pares = {par: i for i, par in enumerate(a.pares)}
+    añade_restricciones(m, x, indice_pares, a.trip, a.cr, a.tt, a.tto, a.oo)
     m.Params.OutputFlag = 0
-
-    etiq = etiquetas_mv(G, fi, iso, dic, idx)
-    return fi, G, iso, dic, idx, m, x, etiq
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    return a.fi, a.G, a.iso, a.dic_aristas, a.idx_ext, m, x, etiq
 
 
 # --- etiquetas -------------------------------------------------------------
@@ -173,6 +182,102 @@ def test_pesos_nulos_no_penalizan():
     m.optimize()
     assert int(round(m.ObjVal)) == 0
     
+# def test_energia_sobre_patron_subdividido():
+#     a = analiza_completo(TOY / "dos_eles.fold")
+#     etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+#     etiq_orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+
+#     assert set(etiq_orig) == set(a.fi_original.dicc_montana_valle)  # ojo
     
+def test_etiquetas_por_pliegue_original():
+    """
+    Tras subdividir, las etiquetas se indexan por arista del patrón
+    nuevo; la energía las necesita por arista del fichero.
+    """
+    a = analiza_completo(TOY / "dos_eles.fold")
+    assert a.subdividido
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+
+    assert set(orig) == set(a.fi_original.dicc_montana_valle)
+
+
+def test_sin_subdividir_no_cambia_nada():
+    """En un patrón convexo la traducción es la identidad."""
+    from flatfold.objective import etiquetas_por_pliegue_original
+    a = analiza_completo(TOY / "waterbomb4.fold")
+    assert not a.subdividido
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+    assert orig == etiq
+    
+    
+def test_energia_sobre_patron_subdividido():
+    """
+    La cadena completa con subdivisión: el objetivo se expresa sobre los
+    pliegues del fichero aunque el patrón se haya partido. Con un solo
+    pliegue y su asignación realizable, el óptimo es 0.
+    """
+    from flatfold.objective import etiquetas_por_pliegue_original
+    a = analiza_completo(TOY / "dos_eles.fold")
+    assert a.subdividido
+
+    m, x = construye_modelo(a.pares)
+    ind = {p: i for i, p in enumerate(a.pares)}
+    añade_restricciones(m, x, ind, a.trip, a.cr, a.tt, a.tto, a.oo)
+    m.Params.OutputFlag = 0
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+    m.setObjective(energia(x, orig, a.fi_original.dicc_montana_valle),
+                   gb.GRB.MINIMIZE)
+    m.optimize()
+
+    assert m.SolCount > 0
+    assert int(round(m.ObjVal)) == 0
+
+
+def test_asignacion_prescrita_sobre_patron_subdividido():
+    """Fijar la etiqueta del pliegue original debe seguir siendo factible."""
+    from flatfold.objective import etiquetas_por_pliegue_original
+    a = analiza_completo(TOY / "dos_eles.fold")
+
+    m, x = construye_modelo(a.pares)
+    ind = {p: i for i, p in enumerate(a.pares)}
+    añade_restricciones(m, x, ind, a.trip, a.cr, a.tt, a.tto, a.oo)
+    m.Params.OutputFlag = 0
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+    n = fija_etiquetas(m, x, orig, a.fi_original.dicc_montana_valle)
+    assert n == 1
+    m.optimize()
+    assert m.SolCount > 0
+
+
+def test_invertir_el_pliegue_tambien_es_realizable():
+    """
+    Con un solo pliegue, las dos etiquetas son posibles: el papel se
+    dobla hacia un lado o hacia el otro. Así que la energía con la
+    asignación invertida también es 0.
+    """
+    from flatfold.objective import etiquetas_por_pliegue_original
+    a = analiza_completo(TOY / "dos_eles.fold")
+
+    m, x = construye_modelo(a.pares)
+    ind = {p: i for i, p in enumerate(a.pares)}
+    añade_restricciones(m, x, ind, a.trip, a.cr, a.tt, a.tto, a.oo)
+    m.Params.OutputFlag = 0
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+    invertida = {k: 1 - v for k, v in a.fi_original.dicc_montana_valle.items()}
+    m.setObjective(energia(x, orig, invertida), gb.GRB.MINIMIZE)
+    m.optimize()
+
+    assert m.SolCount > 0
+    assert int(round(m.ObjVal)) == 0
     
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"

@@ -10,12 +10,19 @@ import pytest
 from itertools import product
 from pathlib import Path
 
-import gurobipy as gb
+# import gurobipy as gb
 from flatfold.model import (facetas_paridad, construye_modelo,
                             añade_restricciones, añade_taco_taco,
-                            resuelve_por_componentes)
+                            resuelve_por_componentes,
+                            analiza_completo)
 from flatfold.presolve import (literales_a_ecuaciones, reduce_completo,
                                componentes, reparte_por_componentes)
+# from flatfold.io_fold import read_fold
+# from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
+#                                   caras_definitivas, grafo_dual, plegar,
+#                                   cara_plegada, aristas_caras)
+# from flatfold.incidences import (pares_comparables, tripletas, cruces,
+#                                      colineales)
 
 RAIZ = Path(__file__).resolve().parent.parent
 TOY = RAIZ / "instances" / "toy"
@@ -78,27 +85,25 @@ def test_ambas_formulaciones_dejan_los_mismos_puntos(n):
 
 # ===== sobre instancias ===================================================
 
+# def monta(ruta):
+
+#     fi = read_fold(ruta)
+#     G = crea_grafo_dirigido(fi)
+#     caras = caras_grafo(G)
+#     _, ext = caras_definitivas(G, caras)
+#     idx = caras.index(ext)
+#     dual = grafo_dual(G, caras, idx)
+#     dic = aristas_caras(G, caras)
+#     iso = plegar(G, dual, min(dual.nodes))
+#     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
+#     pares = pares_comparables(plegadas)
+#     trip = tripletas(plegadas, pares)
+#     cr = cruces(G, caras, plegadas, iso, dic, idx)
+#     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
+#     return pares, trip, cr, tt, tto, oo
 def monta(ruta):
-    from flatfold.io_fold import read_fold
-    from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-                                  caras_definitivas, grafo_dual, plegar,
-                                  cara_plegada, aristas_caras)
-    from flatfold.incidences import (pares_comparables, tripletas, cruces,
-                                     colineales)
-    fi = read_fold(ruta)
-    G = crea_grafo_dirigido(fi)
-    caras = caras_grafo(G)
-    _, ext = caras_definitivas(G, caras)
-    idx = caras.index(ext)
-    dual = grafo_dual(G, caras, idx)
-    dic = aristas_caras(G, caras)
-    iso = plegar(G, dual, min(dual.nodes))
-    plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
-    pares = pares_comparables(plegadas)
-    trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic, idx)
-    tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
-    return pares, trip, cr, tt, tto, oo
+    a = analiza_completo(ruta)
+    return a.pares, a.trip, a.cr, a.tt, a.tto, a.oo
 
 
 def cuenta_directo(datos, facetas, limite=50000):
