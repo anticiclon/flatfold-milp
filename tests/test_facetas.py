@@ -103,8 +103,8 @@ def test_ambas_formulaciones_dejan_los_mismos_puntos(n):
 #     return pares, trip, cr, tt, tto, oo
 def monta(ruta):
     a = analiza_completo(ruta)
-    return a.pares, a.trip, a.cr, a.tt, a.tto, a.oo
-
+    # return a.pares, a.trip, a.cr, a.tt, a.tto, a.oo
+    return a.pares, a.trip, a.cr + a.cr_oo, a.tt, a.tto, a.oo
 
 def cuenta_directo(datos, facetas, limite=50000):
     pares, trip, cr, tt, tto, oo = datos

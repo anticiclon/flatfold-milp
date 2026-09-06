@@ -138,6 +138,7 @@ def añade_restricciones(m, x, indice_pares, tripletas, cruces, taco_taco,
             añade_transitividad(m, x, tripletas)
     if con_cruces:
         añade_cruces(m, x, cruces)
+        # añade_cruces(m, x, cruces_oo)
     if con_colineales:
         añade_taco_taco(m, x, taco_taco, facetas=facetas_paridad_flag)
         añade_igualdades(m, x, taco_tortilla)
@@ -574,7 +575,8 @@ class Analisis:
     plegadas: dict
     pares: list
     trip: list
-    cr: list
+    cr: list          # cruces con taco: las dos caras de la arista se solapan
+    cr_oo: list       # cruces sin taco: tortilla-tortilla
     tt: list
     tto: list
     oo: list
@@ -621,7 +623,7 @@ def analiza_completo(ruta, subdividir=True):
 
     if len(dual) == 0:
         return Analisis(fi, fi0, G, caras, idx_ext, dic_aristas, {}, {},
-                        [], [], [], [], [], [], origen, rep, subdividido)
+                        [], [], [], [], [], [], [], origen, rep, subdividido)
 
     iso = plegar(G, dual, min(dual.nodes))
     verifica_consistencia(G, dual, iso)
@@ -629,12 +631,14 @@ def analiza_completo(ruta, subdividir=True):
 
     pares = pares_comparables(plegadas)
     trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
+    # cr = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext, set(pares))
+    cr, cr_oo = cruces(G, caras, plegadas, iso, dic_aristas, idx_ext,
+                   set(pares))
     tt, tto, oo = colineales(G, caras, plegadas, iso, dic_aristas, idx_ext)
 
     return Analisis(fi, fi0, G, caras, idx_ext, dic_aristas, iso, plegadas,
-                    pares, trip, cr, tt, tto, oo, origen, rep, subdividido)
-
+                    pares, trip, cr, cr_oo, tt, tto, oo, origen, rep,
+                    subdividido)
 
 # def main():
 #     from pathlib import Path

@@ -50,7 +50,10 @@ def monta(ruta):
     etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
     mk = restricciones_maekawa(a.G, a.fi, a.iso, a.dic_aristas,
                                a.idx_ext, etiq)
-    return dict(fi=a.fi, G=a.G, pares=a.pares, trip=a.trip, cr=a.cr,
+    # return dict(fi=a.fi, G=a.G, pares=a.pares, trip=a.trip, cr=a.cr,
+    #             tt=a.tt, tto=a.tto, oo=a.oo, etiq=etiq, mk=mk)
+    return dict(fi=a.fi, G=a.G, pares=a.pares, trip=a.trip,
+                cr=a.cr + a.cr_oo,
                 tt=a.tt, tto=a.tto, oo=a.oo, etiq=etiq, mk=mk)
 
 

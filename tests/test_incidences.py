@@ -92,27 +92,51 @@ def test_los_tres_pares_de_una_tripleta_existen():
 
 # --- cruces ----------------------------------------------------------------
 
+# @pytest.mark.parametrize("nombre,n", [
+#     ("single", 0), ("map13", 0), ("bomb", 0), ("bomb8", 0),
+# ])
+# def test_numero_de_cruces(nombre, n):
+#     """
+#     En las instancias de juguete ninguna cara atraviesa la imagen de una
+#     arista: todas caen sobre los bordes del montón.
+#     """
+#     G, caras, plegadas, iso, dic, idx = monta(nombre)
+#     assert len(cruces(G, caras, plegadas, iso, dic, idx)) == n
+
+
+# def test_cruces_implican_solapamiento():
+#     """Si t atraviesa la arista de f y g, t se solapa con las dos."""
+#     G, caras, plegadas, iso, dic, idx = monta("bomb8")
+#     pares = set(pares_comparables(plegadas))
+#     for f, g, t in cruces(G, caras, plegadas, iso, dic, idx):
+#         assert (min(f, t), max(f, t)) in pares
+#         assert (min(g, t), max(g, t)) in pares
+#         assert t != f and t != g
+
 @pytest.mark.parametrize("nombre,n", [
     ("single", 0), ("map13", 0), ("bomb", 0), ("bomb8", 0),
 ])
 def test_numero_de_cruces(nombre, n):
-    """
-    En las instancias de juguete ninguna cara atraviesa la imagen de una
-    arista: todas caen sobre los bordes del montón.
-    """
     G, caras, plegadas, iso, dic, idx = monta(nombre)
-    assert len(cruces(G, caras, plegadas, iso, dic, idx)) == n
+    ct, coo = cruces(G, caras, plegadas, iso, dic, idx)
+    assert len(ct) + len(coo) == n
 
 
 def test_cruces_implican_solapamiento():
-    """Si t atraviesa la arista de f y g, t se solapa con las dos."""
     G, caras, plegadas, iso, dic, idx = monta("bomb8")
     pares = set(pares_comparables(plegadas))
-    for f, g, t in cruces(G, caras, plegadas, iso, dic, idx):
+    ct, coo = cruces(G, caras, plegadas, iso, dic, idx)
+    for f, g, t in ct + coo:
         assert (min(f, t), max(f, t)) in pares
         assert (min(g, t), max(g, t)) in pares
         assert t != f and t != g
 
+def test_cruces_sin_aristas_planas_son_todos_taco():
+    """Sin aristas planas, todas las caras de un pliegue se solapan,
+    así que ningún cruce cae en tortilla-tortilla."""
+    G, caras, plegadas, iso, dic, idx = monta("bomb8")
+    _, coo = cruces(G, caras, plegadas, iso, dic, idx)
+    assert coo == []
 
 # --- colineales ------------------------------------------------------------
 
@@ -142,6 +166,38 @@ def test_taco_taco_usa_cuatro_caras_distintas():
         assert len(caras_usadas) == 4
         for u, v in cuatro:
             assert (min(u, v), max(u, v)) in pares
+            
+def test_reparto_de_cruces_con_aristas_planas():
+    """
+    En 121_brown_4x4_A99 hay 4 aristas planas, así que los cruces se
+    reparten entre las dos familias: taco-tortilla cuando las dos caras
+    de la arista cruzada se solapan, tortilla-tortilla cuando no.
+
+    Los valores coinciden con la referencia de Flat-Folder. Fijarlos aquí
+    evita que la clasificación se rompa en silencio: el modelo genera la
+    misma restricción en ambos casos, de modo que un error de reparto no
+    cambia el conjunto de soluciones y ningún otro test lo detectaría.
+    """
+    from flatfold.model import analiza_completo
+    ruta = (Path(__file__).resolve().parent.parent / "instances"
+            / "flatfolder" / "grids" / "121_brown_4x4_A99.fold")
+    a = analiza_completo(ruta)
+
+    assert len(a.cr) + len(a.tto) == 616          # taco-tortilla
+    assert len(a.cr_oo) + len(a.oo) == 28         # tortilla-tortilla
+    assert len(a.tt) == 172                       # taco-taco
+    assert len(a.trip) == 2188                    # transitividad   
+            
+            
+def test_sin_aristas_planas_no_hay_cruces_tortilla():
+    """Si todos los pliegues tienen sus caras solapadas, ningún cruce
+    cae en tortilla-tortilla."""
+    from flatfold.model import analiza_completo
+    ruta = (Path(__file__).resolve().parent.parent / "instances"
+            / "flatfolder" / "grids" / "182_brown_4x4_C41.fold")
+    a = analiza_completo(ruta)
+    assert a.cr_oo == []
+    assert len(a.cr) == 600
             
             
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"

@@ -50,8 +50,8 @@ MEDIANA = GRIDS / "182_brown_4x4_C41.fold"
 def monta(ruta):
     a = analiza_completo(ruta)
     etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
-    return a.fi, a.pares, a.trip, a.cr, a.tt, a.tto, a.oo, etiq
-
+    # return a.fi, a.pares, a.trip, a.cr, a.tt, a.tto, a.oo, etiq
+    return a.fi, a.pares, a.trip, a.cr + a.cr_oo, a.tt, a.tto, a.oo, etiq
 
 def modelo(datos, lazy, objetivo=None):
     fi, pares, trip, cr, tt, tto, oo, etiq = datos

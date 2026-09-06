@@ -28,44 +28,82 @@ def pares_comparables(caras_plegadas):
     return pares
 
 
+# def cruces(G, caras, plegadas, iso, dic_aristas, idx_exterior, pares=None):
+#     """
+#     Input:  G, caras, plegadas ({cara: polígono}), iso ({cara: isometría}),
+#             dic_aristas ({(u,v): (f,g)}), idx_exterior,
+#             pares (opcional, solo para comprobar el invariante)
+#     Output: lista de (f, g, t) — la cara t atraviesa la arista que separa
+#             las caras f y g.
+
+#     Se traduce en la restricción x_ft = x_gt: una cara que cruza la línea de
+#     una arista no puede colarse entre los dos trozos de papel unidos por ella.
+#     Vale igual para pliegues (el doblez lo impide) y para aristas planas
+#     (el papel sigue recto y las dos hojas tendrían que cruzarse).
+#     """
+#     restricciones = []
+
+#     for (u, v), (f, g) in dic_aristas.items():
+#         if f == idx_exterior or g == idx_exterior:
+#             continue
+
+#         # imagen plegada de la arista; da igual cuál de las dos caras se use,
+#         # porque coinciden sobre ella (lo garantiza verifica_consistencia)
+#         segmento = (aplica_isometria(iso[f], G.nodes[u]["coor"]),
+#                     aplica_isometria(iso[f], G.nodes[v]["coor"]))
+
+#         for t in plegadas:
+#             if t == f or t == g:
+#                 continue
+#             if atraviesa(segmento, plegadas[t]):
+#                 restricciones.append((f, g, t))
+#                 if pares is not None:
+#                     assert (min(f, t), max(f, t)) in pares, (f, t)
+#                     assert (min(g, t), max(g, t)) in pares, (g, t)
+
+#     return restricciones
+
+
+
 def cruces(G, caras, plegadas, iso, dic_aristas, idx_exterior, pares=None):
     """
-    Input:  G, caras, plegadas ({cara: polígono}), iso ({cara: isometría}),
-            dic_aristas ({(u,v): (f,g)}), idx_exterior,
-            pares (opcional, solo para comprobar el invariante)
-    Output: lista de (f, g, t) — la cara t atraviesa la arista que separa
-            las caras f y g.
+    Output: (taco_tortilla, tortilla_tortilla), listas de (f, g, t).
 
-    Se traduce en la restricción x_ft = x_gt: una cara que cruza la línea de
-    una arista no puede colarse entre los dos trozos de papel unidos por ella.
-    Vale igual para pliegues (el doblez lo impide) y para aristas planas
-    (el papel sigue recto y las dos hojas tendrían que cruzarse).
+    Ambas dan la misma restricción X_ft = X_gt; la distinción es de
+    clasificación, siguiendo el criterio de Akitaya: si las dos caras de
+    la arista se solapan entre sí, la configuración es un taco y el caso
+    es taco-tortilla; si no, es tortilla-tortilla.
+
+    Se separan porque las tablas del artículo reportan restricciones por
+    familia.
     """
-    restricciones = []
+    conjunto = set(pares) if pares is not None else None
+    taco_tortilla, tortilla_tortilla = [], []
 
     for (u, v), (f, g) in dic_aristas.items():
         if f == idx_exterior or g == idx_exterior:
             continue
 
-        # imagen plegada de la arista; da igual cuál de las dos caras se use,
-        # porque coinciden sobre ella (lo garantiza verifica_consistencia)
         segmento = (aplica_isometria(iso[f], G.nodes[u]["coor"]),
                     aplica_isometria(iso[f], G.nodes[v]["coor"]))
+
+        # ¿las dos caras de la arista se solapan? (f1f2 de Akitaya)
+        if conjunto is not None:
+            es_taco = (min(f, g), max(f, g)) in conjunto
+        else:
+            es_taco = se_solapan(plegadas[f], plegadas[g])
+        destino = taco_tortilla if es_taco else tortilla_tortilla
 
         for t in plegadas:
             if t == f or t == g:
                 continue
             if atraviesa(segmento, plegadas[t]):
-                restricciones.append((f, g, t))
-                if pares is not None:
-                    assert (min(f, t), max(f, t)) in pares, (f, t)
-                    assert (min(g, t), max(g, t)) in pares, (g, t)
+                destino.append((f, g, t))
+                if conjunto is not None:
+                    assert (min(f, t), max(f, t)) in conjunto, (f, t)
+                    assert (min(g, t), max(g, t)) in conjunto, (g, t)
 
-    return restricciones
-
-
-
-
+    return taco_tortilla, tortilla_tortilla
 
 
 

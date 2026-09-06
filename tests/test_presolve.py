@@ -182,7 +182,8 @@ def monta(nombre):
     plegadas = {f: cara_plegada(G, caras[f], iso[f]) for f in iso}
     pares = pares_comparables(plegadas)
     trip = tripletas(plegadas, pares)
-    cr = cruces(G, caras, plegadas, iso, dic, idx)
+    # cr = cruces(G, caras, plegadas, iso, dic, idx)
+    cr, cr_oo = cruces(G, caras, plegadas, iso, dic, idx)
     tt, tto, oo = colineales(G, caras, plegadas, iso, dic, idx)
     return fi, pares, trip, cr, tt, tto, oo
 

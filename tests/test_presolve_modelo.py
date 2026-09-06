@@ -46,7 +46,8 @@ GRIDS = (Path(__file__).resolve().parent.parent
 def monta(ruta):
     a = analiza_completo(ruta)
     etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
-    return a.fi, a.pares, a.trip, a.cr, a.tt, a.tto, a.oo, etiq
+    # return a.fi, a.pares, a.trip, a.cr, a.tt, a.tto, a.oo, etiq
+    return a.fi, a.pares, a.trip, a.cr + a.cr_oo, a.tt, a.tto, a.oo, etiq
 
 
 def reduce_todo(pares, trip, cr, tt, tto, oo):
