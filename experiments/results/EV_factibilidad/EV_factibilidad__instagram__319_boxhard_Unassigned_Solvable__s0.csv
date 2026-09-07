@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,pares,caras,t_geometria,t_solver,gurobi_status
+319_boxhard_Unassigned_Solvable.fold,instagram,9b3ebbacd7f0,c721db3,11.0.0,3.11.5,0,2026-09-06 12:47:34,reticula,"la coordenada Fraction(9814814693214813, 10000000000000000) no cae en una retícula racional; la mejor aproximación es 53/54 y dista 1.22e-08",0,0,0.085,0.0,0

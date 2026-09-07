@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+321_maeng_Dicranocephalus_wallichii.fold,instagram,7861dcee49a1,c721db3,11.0.0,3.11.5,0,2026-09-06 19:13:15,coincide,,0,,432,432,878,878,447,447,25743,25743,10913,10913,24433,24433,0,0,861287,861287

@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+086_miwu_5x5_Flippable_Pixel_Grid_1.fold,instagram,da5b03a19ddf,c721db3,11.0.0,3.11.5,0,2026-09-06 19:10:08,coincide,,0,,185,185,409,409,225,225,2372,2372,461,461,2076,2076,330,330,12074,12074

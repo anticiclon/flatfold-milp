@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+345_brown_4x4_D85.fold,grids,48efe00f8f9b,c721db3,11.0.0,3.11.5,0,2026-09-06 19:08:30,coincide,,0,,120,120,292,292,173,173,2468,2468,892,892,1500,1500,0,0,19320,19320

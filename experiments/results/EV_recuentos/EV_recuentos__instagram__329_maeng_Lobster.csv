@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+329_maeng_Lobster.fold,instagram,1ce7e6d31ca1,c721db3,11.0.0,3.11.5,0,2026-09-06 19:13:55,coincide,,0,,849,849,1780,1780,932,932,88948,88948,39669,39669,77819,77819,0,0,5704821,5704821

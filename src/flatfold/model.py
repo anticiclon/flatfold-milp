@@ -435,7 +435,8 @@ def construye_reducido(datos, nombre="componente", minimizar=False,
 
 def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
                              limite_pool=10**7, tiempo=None, silencioso=True,
-                             presolve_gurobi=-1, facetas=False, lazy=False):
+                             presolve_gurobi=-1, facetas=False, lazy=False,
+                             semilla=None):
     """
     Input:  datos_comps — lista de reparte_por_componentes()
             constante — el término independiente de energia_reducida()
@@ -469,6 +470,8 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
         m, beta = construye_reducido(datos, f"comp{k}",
                                      minimizar=(modo == "optimizacion"),
                                      facetas=facetas, lazy=lazy)
+        if semilla is not None:
+            m.Params.Seed = semilla
         if silencioso:
             m.Params.OutputFlag = 0
         if tiempo is not None:

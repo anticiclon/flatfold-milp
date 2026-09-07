@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,presolve,presolve_gurobi,facetas,lazy,blb,maekawa,caso,k_perturbacion,semilla_perturbacion,tiempo_limite,semilla,estado,error,t_geometria,caras,vars,vars_reducidas,componentes,t_presolve,t_construccion,t_optimize,valor,nodos,gurobi_status,n_fijadas
+226_brown_4x4_C85.fold,grids,ab720ea0f997,a02e838,11.0.0,3.11.5,0,2026-09-07 00:21:46,False,0,False,False,False,False,optimizacion,20,0,300,0,ok,,3.232,289,4008,4008,1,0.0,0.841,3.322,20,1,2,0

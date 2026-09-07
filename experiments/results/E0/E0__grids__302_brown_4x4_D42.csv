@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,t_geometria,vertices,aristas,caras,subdividido,pares,tripletas,cruces,taco_taco,taco_tortilla,tortilla_tortilla
+302_brown_4x4_D42.fold,grids,95fbd451bd70,c721db3,11.0.0,3.11.5,0,2026-09-06 00:07:39,pendiente,"arista 6 (10->14, (6, 14)->(10, 6)): pendiente no admisible",0.002,0,0,0,0,0,0,0,0,0,0

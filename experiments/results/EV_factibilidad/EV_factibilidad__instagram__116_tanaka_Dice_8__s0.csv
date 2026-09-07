@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,pares,caras,t_geometria,t_solver,gurobi_status
+116_tanaka_Dice_8.fold,instagram,1cabf58a9a53,c721db3,11.0.0,3.11.5,0,2026-09-06 12:37:17,pendiente,"arista 152 (33->40, (18, 234)->(24, 216)): pendiente no admisible",0,0,0.009,0.0,0

@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+351_brown_4x4_D91.fold,grids,32f940c897d7,c721db3,11.0.0,3.11.5,0,2026-09-06 19:08:39,pendiente,"arista 100 (74->83, (28, 16)->(32, 28)): pendiente no admisible",0,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0

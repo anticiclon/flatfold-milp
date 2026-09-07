@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,pares,caras,t_geometria,t_solver,gurobi_status
+075_bodo_Dwarf.fold,instagram,dc41f658f890,c721db3,11.0.0,3.11.5,0,2026-09-06 12:37:05,pendiente,"arista 366 (159->169, (360, 168)->(384, 180)): pendiente no admisible",0,0,0.056,0.0,0

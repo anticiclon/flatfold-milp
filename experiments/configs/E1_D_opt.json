@@ -1,0 +1,4 @@
+{"presolve": true, "presolve_gurobi": 0, "facetas": false,
+ "lazy": false, "blb": false, "maekawa": false,
+ "caso": "optimizacion", "k_perturbacion": 20,
+ "semilla_perturbacion": 0, "tiempo_limite": 300}

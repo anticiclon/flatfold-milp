@@ -1,0 +1,3 @@
+{"presolve": true, "presolve_gurobi": -1, "facetas": false,
+ "lazy": false, "blb": false, "maekawa": false,
+ "caso": "factibilidad", "tiempo_limite": 300}

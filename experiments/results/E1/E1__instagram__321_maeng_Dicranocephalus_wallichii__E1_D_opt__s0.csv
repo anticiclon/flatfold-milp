@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,presolve,presolve_gurobi,facetas,lazy,blb,maekawa,caso,k_perturbacion,semilla_perturbacion,tiempo_limite,semilla,estado,error,t_geometria,caras,vars,vars_reducidas,componentes,t_presolve,t_construccion,t_optimize,valor,nodos,gurobi_status,n_fijadas
+321_maeng_Dicranocephalus_wallichii.fold,instagram,7861dcee49a1,a02e838,11.0.0,3.11.5,0,2026-09-07 01:04:25,True,0,False,False,False,False,optimizacion,20,0,300,0,ok,,30.071,447,25743,4703,1,9.88,0.0,92.96,20,1,0,0

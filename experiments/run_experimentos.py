@@ -25,9 +25,20 @@ import sys
 import time
 from pathlib import Path
 import re
+import random
 from flatfold.model import (analiza_completo, construye_modelo,
-                                añade_restricciones)
+                                añade_restricciones, 
+                                resuelve_con_lazy, 
+                                resuelve_por_componentes)
 from flatfold.presolve import Infactible
+import gurobipy as gb
+from flatfold.objective import (etiquetas_mv, energia, fija_etiquetas,
+                                    restricciones_blb, restricciones_maekawa,
+                                    etiquetas_por_pliegue_original)
+from flatfold.presolve import (literales_a_ecuaciones, reduce_completo,
+                                   componentes, reparte_por_componentes,
+                                   energia_reducida, maekawa_reducido)
+
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -221,9 +232,6 @@ def experimento_EV_factibilidad(ruta, config, semilla):
     No se fija la asignación M/V: se comprueba que existe algún orden de
     capas, no que la etiqueta del fichero sea realizable.
     """
-    import gurobipy as gb
-    from flatfold.model import (analiza_completo, construye_modelo,
-                                añade_restricciones)
 
     fila = metadatos(ruta)
     fila.update(estado="", error="", pares=0, caras=0,
@@ -328,7 +336,6 @@ def experimento_EV_recuentos(ruta, config, semilla):
     que no deberían cambiar: si difieren, la discrepancia es de datos y
     no de modelo.
     """
-    from flatfold.model import analiza_completo
 
     fila = metadatos(ruta)
     fila.update(estado="", error="", n_difieren=0, difieren="")
@@ -388,6 +395,252 @@ EXPERIMENTOS = {"E0": experimento_E0,
                 "EV_factibilidad": experimento_EV_factibilidad,
                 "EV_recuentos": experimento_EV_recuentos}
 
+
+def subconjunto_prescrito(prescritas, porcentaje, semilla_sub):
+    """
+    Elige al azar un porcentaje de los pliegues para fijar.
+
+    La semilla es INDEPENDIENTE de la de Gurobi: así, al variar esta
+    última se mide solo la varianza del solver y no un problema distinto.
+    """
+    if porcentaje >= 100:
+        return dict(prescritas)
+    aristas = sorted(prescritas)
+    k = round(len(aristas) * porcentaje / 100)
+    elegidas = random.Random(semilla_sub).sample(aristas, k)
+    return {e: prescritas[e] for e in elegidas}
+
+
+
+
+def asignacion_perturbada(prescritas, k, semilla_pert):
+    """
+    Invierte k pliegues elegidos al azar sobre la asignación del fichero.
+
+    La del fichero es realizable —son patrones que Flat-Folder pliega—,
+    así que perturbarla produce una asignación que con alta probabilidad
+    no lo es. El óptimo de la reparación queda entonces entre 1 y k:
+    devolver esos k pliegues a su sitio es siempre una solución posible,
+    y a veces bastan menos.
+
+    Esa cota superior es una comprobación gratis de corrección: un óptimo
+    mayor que k indicaría un error.
+
+    La semilla es INDEPENDIENTE de la de Gurobi, para que al variar esta
+    última se mida la varianza del solver y no un problema distinto.
+    """
+    aristas = sorted(prescritas)
+    k = min(k, len(aristas))
+    invertidas = set(random.Random(semilla_pert).sample(aristas, k))
+    return {e: (1 - v if e in invertidas else v)
+            for e, v in prescritas.items()}
+
+
+
+
+
+def resuelve_con_config(a, config, semilla):
+    """
+    Construye y resuelve el modelo según las banderas de la configuración.
+
+    Devuelve un diccionario con el resultado y los tiempos desglosados.
+    Los dos caminos —con y sin presolve— quedan detrás de la misma
+    interfaz, de modo que el experimento no tiene que distinguirlos.
+
+    Los tiempos se miden abarcando las mismas fases en ambos caminos:
+    t_presolve más t_construccion cubren hasta justo antes de optimizar,
+    y t_optimize solo la resolución. Medirlos de otro modo en una rama
+    invalidaría cualquier comparación.
+
+    Casos: factibilidad, prescrita, parcial, optimizacion.
+    """
+    r = {"vars": len(a.pares), "vars_reducidas": 0, "componentes": 0,
+         "t_presolve": 0.0, "t_construccion": 0.0, "t_optimize": 0.0,
+         "estado": "", "valor": "", "nodos": 0, "gurobi_status": 0,
+         "n_fijadas": 0, "k_perturbacion": ""}
+
+    modo = config.get("caso", "factibilidad")
+    limite = config.get("tiempo_limite", 300)
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+    blb = (restricciones_blb(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext,
+                             etiq) if config.get("blb") else None)
+    mk = (restricciones_maekawa(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext,
+                                etiq) if config.get("maekawa") else None)
+
+    # qué etiquetas se fijan, según el caso
+    prescritas = None
+    if modo in ("prescrita", "parcial"):
+        prescritas = subconjunto_prescrito(
+            a.fi_original.dicc_montana_valle,
+            100 if modo == "prescrita" else config.get("porcentaje", 50),
+            config.get("semilla_subconjunto", 0))
+        r["n_fijadas"] = len(prescritas)
+
+    # el objetivo de reparación: la asignación del fichero con k pliegues
+    # invertidos. Invertirlos todos no sirve: suele seguir siendo
+    # realizable y el óptimo sale 0, sin dificultad para el solver.
+    objetivo = None
+    if modo == "optimizacion":
+        k = config.get("k_perturbacion", 3)
+        r["k_perturbacion"] = k
+        objetivo = asignacion_perturbada(
+            a.fi_original.dicc_montana_valle, k,
+            config.get("semilla_perturbacion", 0))
+
+    modo_solver = "optimizacion" if modo == "optimizacion" else "factibilidad"
+
+    # ---------------- camino con presolve ----------------
+    if config.get("presolve"):
+        t = time.perf_counter()
+        try:
+            ig, par, fij = literales_a_ecuaciones(
+                a.pares, a.cr + a.cr_oo, a.tto, a.oo, a.tt,
+                etiquetas=orig if prescritas else None,
+                prescritas=prescritas, blb=blb)
+            mapeo, restantes, vivas, _ = reduce_completo(
+                len(a.pares), ig, par, fij, a.trip, a.pares)
+            mkr = maekawa_reducido(mapeo, a.pares, mk) if mk else None
+            comps = componentes(mapeo, restantes, a.trip, a.pares, mkr)
+
+            terminos, const = ({}, 0)
+            if objetivo is not None:
+                terminos, const = energia_reducida(mapeo, a.pares, orig,
+                                                   objetivo)
+
+            datos = reparte_por_componentes(comps, vivas, restantes,
+                                            terminos, mkr)
+        except Infactible:
+            # el presolve detecta la contradicción sin llegar al solver
+            r["t_presolve"] = round(time.perf_counter() - t, 3)
+            r["estado"] = "infactible"
+            return r
+
+        r["t_presolve"] = round(time.perf_counter() - t, 3)
+        r["vars_reducidas"] = sum(len(d["raices"]) for d in datos)
+        r["componentes"] = len(comps)
+
+        t = time.perf_counter()
+        valor, _, nodos = resuelve_por_componentes(
+            datos, const, modo=modo_solver, tiempo=limite,
+            presolve_gurobi=config.get("presolve_gurobi", -1),
+            facetas=config.get("facetas", False),
+            lazy=config.get("lazy", False),
+            semilla=semilla)
+        r["t_optimize"] = round(time.perf_counter() - t, 3)
+        r["nodos"] = int(nodos)
+
+        if valor is None or valor is False:
+            r["estado"] = "sin_solucion"
+        else:
+            r["estado"] = "ok"
+            if modo_solver == "optimizacion":
+                r["valor"] = int(round(valor))
+        return r
+
+    # ---------------- camino sin presolve ----------------
+    t = time.perf_counter()
+    m, x = construye_modelo(a.pares)
+    ind = {p: i for i, p in enumerate(a.pares)}
+    añade_restricciones(m, x, ind, a.trip, a.cr + a.cr_oo, a.tt, a.tto,
+                        a.oo, blb=blb, maekawa=mk,
+                        con_blb=bool(blb), con_maekawa=bool(mk),
+                        facetas_paridad_flag=config.get("facetas", False),
+                        transitividad_lazy=config.get("lazy", False))
+    m.Params.OutputFlag = 0
+    m.Params.IntegralityFocus = 1
+    m.Params.MIPGap = 0
+    m.Params.TimeLimit = limite
+    m.Params.Presolve = config.get("presolve_gurobi", -1)
+    if semilla is not None:
+        m.Params.Seed = semilla
+
+    if prescritas:
+        fija_etiquetas(m, x, orig, prescritas)
+
+    if modo == "optimizacion":
+        m.setObjective(energia(x, orig, objetivo), gb.GRB.MINIMIZE)
+    else:
+        m.Params.SolutionLimit = 1
+
+    r["vars_reducidas"] = len(a.pares)
+    r["componentes"] = 1
+    r["t_construccion"] = round(time.perf_counter() - t, 3)
+
+    t = time.perf_counter()
+    if config.get("lazy"):
+        resuelve_con_lazy(m)
+    else:
+        m.optimize()
+    r["t_optimize"] = round(time.perf_counter() - t, 3)
+
+    r["nodos"] = int(m.NodeCount)
+    r["gurobi_status"] = m.Status
+    if m.SolCount > 0:
+        r["estado"] = "ok"
+        if modo == "optimizacion":
+            r["valor"] = int(round(m.ObjVal))
+    elif m.Status == gb.GRB.INFEASIBLE:
+        r["estado"] = "infactible"
+    else:
+        r["estado"] = "sin_resolver"
+    return r
+
+
+
+
+
+def experimento_E1(ruta, config, semilla):
+    """
+    Presolve sobre F2, cruzado con el presolve de Gurobi.
+
+    Las cuatro celdas del 2x2 se definen en los ficheros de
+    configuración; aquí solo se ejecuta lo que digan. El mismo código
+    sirve para E2, E3 y E4 cambiando las banderas, de modo que esas
+    variantes no necesitan función propia.
+    """
+
+    fila = metadatos(ruta)
+    fila.update(config)
+    fila.update(semilla=semilla if semilla is not None else "",
+                estado="", error="", t_geometria=0.0, caras=0)
+
+    t = time.perf_counter()
+    try:
+        a = analiza_completo(ruta)
+    except ValueError as e:
+        fila["estado"] = clasifica(str(e))
+        fila["error"] = str(e)[:200]
+        fila["t_geometria"] = round(time.perf_counter() - t, 3)
+        return fila
+    except Exception as e:
+        fila["estado"] = "excepcion"
+        fila["error"] = f"{type(e).__name__}: {e}"[:200]
+        fila["t_geometria"] = round(time.perf_counter() - t, 3)
+        return fila
+
+    fila["t_geometria"] = round(time.perf_counter() - t, 3)
+    fila["caras"] = len(a.plegadas)
+
+    if not a.pares:
+        fila["estado"] = "sin_pliegues"
+        return fila
+
+    try:
+        fila.update(resuelve_con_config(a, config, semilla))
+    except Exception as e:
+        fila["estado"] = "excepcion"
+        fila["error"] = f"{type(e).__name__}: {e}"[:200]
+
+    return fila
+
+
+EXPERIMENTOS = {"E0": experimento_E0,
+                "EV_stamp": experimento_EV_stamp,
+                "EV_factibilidad": experimento_EV_factibilidad,
+                "EV_recuentos": experimento_EV_recuentos,
+                "E1": experimento_E1}
 
 
 # ===== principal ==========================================================

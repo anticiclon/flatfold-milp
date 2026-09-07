@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+336_maeng_Mantis.fold,instagram,58d685f9b521,c721db3,11.0.0,3.11.5,0,2026-09-06 19:17:38,coincide,,0,,1067,1067,2224,2224,1158,1158,127881,127881,57707,57707,113813,113813,0,0,9027939,9027939

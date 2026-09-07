@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,pares,caras,t_geometria,t_solver,gurobi_status
+001_brown_2x2_C1.fold,grids,2d4ad5f04e6c,c721db3,11.0.0,3.11.5,0,2026-09-06 12:25:34,factible,,64,21,0.012,0.012,2

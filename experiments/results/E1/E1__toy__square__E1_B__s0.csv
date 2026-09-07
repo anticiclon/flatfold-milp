@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,presolve,presolve_gurobi,facetas,lazy,blb,maekawa,caso,tiempo_limite,semilla,estado,error,t_geometria,caras
+square.fold,toy,4cecfed0b273,a02e838,11.0.0,3.11.5,0,2026-09-06 23:44:33,True,-1,False,False,False,False,factibilidad,300,0,sin_pliegues,,0.0,0

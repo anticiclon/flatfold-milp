@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,pares,caras,t_geometria,t_solver,gurobi_status
+105_brown_4x4_A83.fold,grids,19f49d4f67eb,c721db3,11.0.0,3.11.5,0,2026-09-06 12:26:47,pendiente,"arista 29 (39->47, (12, 16)->(16, 28)): pendiente no admisible",0,0,0.006,0.0,0

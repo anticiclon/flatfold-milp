@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,n_difieren,difieren,mio_vertices,ref_vertices,mio_edges,ref_edges,mio_faces,ref_faces,mio_variables,ref_variables,mio_taco-taco,ref_taco-taco,mio_taco-tortilla,ref_taco-tortilla,mio_tortilla-tortilla,ref_tortilla-tortilla,mio_transitivity,ref_transitivity
+097_kei_CP_THX.fold,instagram,f61bf60d7edf,c721db3,11.0.0,3.11.5,0,2026-09-06 19:10:12,coincide,,0,,104,104,200,200,97,97,902,902,145,145,1015,1015,0,0,4372,4372

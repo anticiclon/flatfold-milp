@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,estado,error,pares,caras,t_geometria,t_solver,gurobi_status
+162_imai_Carp.fold,instagram,bd0965c03d4a,c721db3,11.0.0,3.11.5,0,2026-09-06 12:37:20,pendiente,"arista 8 (13->14, (72, 4)->(64, 20)): pendiente no admisible",0,0,0.075,0.0,0

@@ -1,0 +1,2 @@
+instancia,carpeta,hash_instancia,commit,gurobi,python,optimizado,fecha,presolve,presolve_gurobi,facetas,lazy,blb,maekawa,caso,tiempo_limite,semilla,estado,error,t_geometria,caras
+bad_kawasaki.fold,toy,c11b0a2b4746,a02e838,11.0.0,3.11.5,0,2026-09-06 23:44:32,True,-1,False,False,False,False,factibilidad,300,0,kawasaki,"Kawasaki falla en el vértice 8: holonomía = ((1, 0, 0, -1), (0, 4))",0.001,0
