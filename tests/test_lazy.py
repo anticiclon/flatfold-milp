@@ -10,18 +10,16 @@ que la solución devuelta cumple TODAS las tripletas.
 """
 import pytest
 from pathlib import Path
-
 import gurobipy as gb
-# from flatfold.io_fold import read_fold
-# from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
-#                               caras_definitivas, grafo_dual, plegar,
-#                               cara_plegada, aristas_caras)
-# from flatfold.incidences import (pares_comparables, tripletas, cruces,
-#                                  colineales)
 from flatfold.objective import etiquetas_mv, energia
 from flatfold.model import (construye_modelo, añade_restricciones,
                             resuelve_con_lazy, 
-                            separa_tripletas, analiza_completo)
+                            separa_tripletas, analiza_completo,
+                            separa_tripletas_beta)
+from flatfold.presolve import (literales_a_ecuaciones, reduce_completo,
+                                   componentes, reparte_por_componentes,
+                                   energia_reducida)
+from flatfold.model import resuelve_por_componentes
 
 RAIZ = Path(__file__).resolve().parent.parent
 TOY = RAIZ / "instances" / "toy"
@@ -154,6 +152,62 @@ def test_sin_tripletas_colgadas_falla():
     añade_restricciones(m, x, ind, trip, cr, tt, tto, oo)
     with pytest.raises(AssertionError):
         resuelve_con_lazy(m)
+        
+def test_separa_beta_detecta_el_ciclo():
+    """Tres literales que valen lo mismo: violación."""
+    trip = [[(0, 0), (1, 0), (2, 0)]]
+    assert separa_tripletas_beta({0: 1, 1: 1, 2: 1}, trip) == trip
+    assert separa_tripletas_beta({0: 0, 1: 0, 2: 0}, trip) == trip
+
+
+def test_separa_beta_acepta_lo_valido():
+    trip = [[(0, 0), (1, 0), (2, 0)]]
+    assert separa_tripletas_beta({0: 1, 1: 1, 2: 0}, trip) == []
+
+
+def test_separa_beta_respeta_los_signos():
+    """Con un literal complementado, el mismo beta da otro resultado."""
+    trip = [[(0, 0), (1, 0), (2, 1)]]
+    # beta = 1,1,1 -> literales 1,1,0 -> suma 2, válido
+    assert separa_tripletas_beta({0: 1, 1: 1, 2: 1}, trip) == []
+    # beta = 1,1,0 -> literales 1,1,1 -> suma 3, violado
+    assert separa_tripletas_beta({0: 1, 1: 1, 2: 0}, trip) == trip
+    
+    
+def test_lazy_reducido_mismo_optimo():
+    """
+    Con presolve y transitividad perezosa, el óptimo debe coincidir con
+    el de la versión estática, y la solución no puede violar ninguna
+    tripleta.
+    """
+
+    a = analiza_completo(TOY / "waterbomb4.fold")
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    invertida = {k: 1 - v for k, v in a.fi.dicc_montana_valle.items()}
+
+    ig, par, fij = literales_a_ecuaciones(
+        a.pares, a.cr + a.cr_oo, a.tto, a.oo, a.tt)
+    mapeo, restantes, vivas, _ = reduce_completo(
+        len(a.pares), ig, par, fij, a.trip, a.pares)
+    comps = componentes(mapeo, restantes, a.trip, a.pares)
+    terminos, const = energia_reducida(mapeo, a.pares, etiq, invertida)
+    datos = reparte_por_componentes(comps, vivas, restantes, terminos)
+
+    v1, _, _ = resuelve_por_componentes(datos, const, modo="optimizacion")
+    v2, beta, _ = resuelve_por_componentes(datos, const,
+                                           modo="optimizacion", lazy=True)
+    assert int(round(v1)) == int(round(v2))
+
+    # la solución no viola ninguna tripleta, tampoco las no separadas
+    assert separa_tripletas_beta(beta, vivas) == []
+
+
+def test_lazy_reducido_rechaza_el_recuento():
+    """El solution pool no es fiable con separación perezosa."""
+    import pytest
+    from flatfold.model import resuelve_por_componentes
+    with pytest.raises(ValueError):
+        resuelve_por_componentes([], modo="recuento", lazy=True)
         
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"
 

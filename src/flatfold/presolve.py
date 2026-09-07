@@ -273,7 +273,7 @@ def expande(mapeo, pares, valores_beta):
     return valores
 
 
-def componentes(mapeo, paridades_restantes, tripletas, pares):
+def componentes(mapeo, paridades_restantes, tripletas, pares, maekawa=None):
     """
     Input:  mapeo — el de reduce()
             paridades_restantes — las que sobrevivieron
@@ -289,6 +289,11 @@ def componentes(mapeo, paridades_restantes, tripletas, pares):
     Las aristas de las tripletas hacen falta AUNQUE la transitividad se
     genere de forma perezosa: ligan variables aunque las restricciones
     no lleguen a escribirse. Omitirlas da una descomposición incorrecta.
+    
+    Las aristas de Maekawa también hacen falta: acopla las variables de
+    los pliegues de un vértice igual que las tripletas acoplan las suyas.
+    Omitirlas daría una descomposición incorrecta, y el assert del
+    reparto lo detectaría.
     """
     idx = {par: i for i, par in enumerate(pares)}
 
@@ -318,6 +323,9 @@ def componentes(mapeo, paridades_restantes, tripletas, pares):
             i, _ = indice_literal(idx, u, v)
             raices.append(raiz_de(i))
         conecta(raices)
+        
+    for coefs, _ in (maekawa or []):
+        conecta(list(coefs))
 
     # componentes conexas
     comps, visitadas = [], set()
@@ -536,14 +544,15 @@ def energia_reducida(mapeo, pares, etiquetas, objetivo, pesos=None):
     return dict(terminos), constante
 
 
-def reparte_por_componentes(comps, tripletas_vivas, paridades, terminos):
+def reparte_por_componentes(comps, tripletas_vivas, paridades, terminos,
+                            maekawa=None):
     """
     Input:  comps — lista de conjuntos de raíces
             tripletas_vivas — [[(raiz, signo) x3]]
             paridades — [[(raiz, signo), ...]] con soporte 3 o 4
             terminos — {raiz: coeficiente} del objetivo
     Output: lista de diccionarios, uno por componente:
-            {"raices", "tripletas", "paridades", "terminos"}
+            {"raices", "tripletas", "paridades", "terminos", "maekawa"}
 
     Cada componente se resuelve por separado. Toda restricción debe caer
     entera dentro de una componente: si tuviera raíces de dos componentes
@@ -555,8 +564,10 @@ def reparte_por_componentes(comps, tripletas_vivas, paridades, terminos):
         for r in comp:
             de_quien[r] = k
 
+    # datos = [{"raices": set(comp), "tripletas": [], "paridades": [],
+    #           "terminos": {}} for comp in comps]
     datos = [{"raices": set(comp), "tripletas": [], "paridades": [],
-              "terminos": {}} for comp in comps]
+              "terminos": {}, "maekawa": []} for comp in comps]
 
     def componente_de(lits, que):
         ks = {de_quien[r] for r, _ in lits}
@@ -573,6 +584,11 @@ def reparte_por_componentes(comps, tripletas_vivas, paridades, terminos):
     for raiz, coef in terminos.items():
         assert raiz in de_quien, f"término sobre una raíz inexistente: {raiz}"
         datos[de_quien[raiz]]["terminos"][raiz] = coef
+        
+    for coefs, const in (maekawa or []):
+        ks = {de_quien[r] for r in coefs}
+        assert len(ks) == 1, f"Maekawa cruza {len(ks)} componentes: {coefs}"
+        datos[ks.pop()]["maekawa"].append((coefs, const))
 
     return datos
 
@@ -594,4 +610,116 @@ def blb_a_igualdades(blb, pares):
         i2, s_p2 = indice_literal(idx, u2, v2)
         salida.append((i1, s_p1 ^ s_o1, i2, (s_p2 ^ s_o2) ^ 1))
     return salida
+
+# def maekawa_reducido(mapeo, pares, maekawa):
+#     """
+#     Input:  mapeo — el de reduce()
+#             pares — lista de (f,g), para traducir a índices
+#             maekawa — [[((u,v), s), ...]], de restricciones_maekawa
+#     Output: lista de (coeficientes, constante), una por vértice, donde
+#             coeficientes es {raiz: c} con c entero.
+
+#     La condición es  sum_e (2*m_e - 1) = 4*s_v - 2.
+
+#     Cada m_e es un literal sobre una variable x_i. Tras el presolve,
+#     x_i = beta_r o su complemento, y entonces
+
+#         2*m_e - 1 = +(2*beta_r - 1)   si el literal es directo
+#                   = -(2*beta_r - 1)   si es complementado
+
+#     de modo que la suma se escribe como sum_r c_r * (2*beta_r - 1) más
+#     una constante que aportan los literales ya determinados.
+
+#     Los coeficientes se SUMAN, no se cancelan módulo 2: dos pliegues del
+#     mismo vértice pueden caer sobre la misma raíz y la suma es
+#     aritmética.
+#     """
+#     idx = {par: i for i, par in enumerate(pares)}
+#     salida = []
+
+#     for lits in maekawa:
+#         coefs = defaultdict(int)
+#         constante = 0
+
+#         for (u, v), s_orient in lits:
+#             i, s_par = indice_literal(idx, u, v)
+#             s = s_par ^ s_orient
+#             entrada = mapeo[i]
+
+#             if entrada[0] == "const":
+#                 m_e = entrada[1] ^ s
+#                 constante += 2 * m_e - 1
+#                 continue
+
+#             _, raiz, s_raiz = entrada
+#             t = s ^ s_raiz
+#             coefs[raiz] += 1 if t == 0 else -1
+
+#         # las raíces con coeficiente nulo desaparecen
+#         coefs = {r: c for r, c in coefs.items() if c != 0}
+#         salida.append((coefs, constante))
+
+#     return salida
+
+def maekawa_reducido(mapeo, pares, maekawa):
+    """
+    Input:  mapeo — el de reduce()
+            pares — lista de (f,g), para traducir a índices
+            maekawa — [[((u,v), s), ...]], de restricciones_maekawa
+    Output: lista de (coeficientes, constante) con coeficientes {raiz: c}.
+
+    La condición es  sum_e (2*m_e - 1) = 4*s_v - 2.
+
+    Cada m_e es un literal sobre una variable x_i. Tras el presolve,
+    x_i = beta_r o su complemento, y entonces
+
+        2*m_e - 1 = +(2*beta_r - 1)   si el literal es directo
+                  = -(2*beta_r - 1)   si es complementado
+
+    de modo que la suma queda como sum_r c_r * (2*beta_r - 1) más una
+    constante que aportan los literales ya determinados.
+
+    Los coeficientes se SUMAN, no se cancelan módulo 2: dos pliegues del
+    mismo vértice pueden caer sobre la misma raíz y la suma es
+    aritmética.
+
+    Los vértices cuyos literales quedan todos determinados no producen
+    restricción: o su constante vale +-2, y entonces se cumple sola, o no
+    y el sistema es infactible. Ese caso se resuelve aquí para que ni el
+    reparto ni la construcción del modelo tengan que contemplarlo.
+    """
+    idx = {par: i for i, par in enumerate(pares)}
+    salida = []
+
+    for lits in maekawa:
+        coefs = defaultdict(int)
+        constante = 0
+
+        for (u, v), s_orient in lits:
+            i, s_par = indice_literal(idx, u, v)
+            s = s_par ^ s_orient
+            entrada = mapeo[i]
+
+            if entrada[0] == "const":
+                constante += 2 * (entrada[1] ^ s) - 1
+                continue
+
+            _, raiz, s_raiz = entrada
+            coefs[raiz] += 1 if (s ^ s_raiz) == 0 else -1
+
+        coefs = {r: c for r, c in coefs.items() if c != 0}
+
+        if not coefs:
+            if constante not in (-2, 2):
+                raise Infactible(
+                    "Maekawa violada en un vértice ya determinado por el "
+                    f"presolve: |M - V| = {abs(constante)}")
+            continue                       # se cumple sola
+
+        salida.append((coefs, constante))
+
+    return salida
+
+
+
 

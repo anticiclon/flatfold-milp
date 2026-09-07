@@ -178,6 +178,39 @@ def test_maekawa_anade_una_binaria_por_vertice():
     m2.update()
     assert m2.NumVars - m1.NumVars == len(d["mk"])
     assert m2.NumConstrs - m1.NumConstrs == len(d["mk"])
+    
+    
+def test_maekawa_reducido_no_cambia_el_recuento():
+    """
+    Maekawa es implicada: por el camino del presolve tampoco puede
+    eliminar estados. Si el recuento baja, la traducción de signos de
+    maekawa_reducido está mal.
+    """
+    from flatfold.objective import etiquetas_mv, restricciones_maekawa
+    from flatfold.presolve import (literales_a_ecuaciones, reduce_completo,
+                                   componentes, reparte_por_componentes,
+                                   maekawa_reducido)
+    from flatfold.model import analiza_completo, resuelve_por_componentes
+
+    a = analiza_completo(TOY / "waterbomb4.fold")
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    mk = restricciones_maekawa(a.G, a.fi, a.iso, a.dic_aristas,
+                               a.idx_ext, etiq)
+    assert len(mk) == 1
+
+    def cuenta(con_maekawa):
+        ig, par, fij = literales_a_ecuaciones(
+            a.pares, a.cr + a.cr_oo, a.tto, a.oo, a.tt)
+        mapeo, restantes, vivas, _ = reduce_completo(
+            len(a.pares), ig, par, fij, a.trip, a.pares)
+        mkr = maekawa_reducido(mapeo, a.pares, mk) if con_maekawa else None
+        comps = componentes(mapeo, restantes, a.trip, a.pares, mkr)
+        datos = reparte_por_componentes(comps, vivas, restantes, {}, mkr)
+        n, _, _ = resuelve_por_componentes(datos, modo="recuento")
+        return n
+
+    assert cuenta(False) == 8
+    assert cuenta(True) == 8
 
 
 # Ejecutar: !pytest "C:\Users\Trabajador\Desktop\origami\flatfold-milp"

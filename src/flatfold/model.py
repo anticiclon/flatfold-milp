@@ -13,7 +13,8 @@ from flatfold.pattern import (crea_grafo_dirigido, caras_grafo,
 from flatfold.validate import valida_pendientes, valida_kawasaki
 from flatfold.subdivision import (necesita_subdivision,
                                       subdivide_vertical, representantes)
-from flatfold.geometry import es_convexa
+# from flatfold.geometry import es_convexa
+# from flatfold.presolve import Infactible
 
 
 
@@ -283,7 +284,7 @@ def analiza(ruta, subdividir=True):
 
 
 def construye_reducido(datos, nombre="componente", minimizar=False,
-                       facetas=False):
+                       facetas=False, lazy=False):
     """
     Input:  datos — un diccionario de reparte_por_componentes:
                     {"raices", "tripletas", "paridades", "terminos"}
@@ -294,6 +295,18 @@ def construye_reducido(datos, nombre="componente", minimizar=False,
     tres literales no valgan lo mismo; las paridades, que la suma de sus
     literales sea par (o impar, según la constante que arrastren).
     """
+    # m = gb.Model(nombre)
+    # raices = sorted(datos["raices"])
+    # beta = m.addVars(raices, vtype=gb.GRB.BINARY, name="b")
+
+    # def lit(r, s):
+    #     return beta[r] if s == 0 else 1 - beta[r]
+    
+    # for lits in datos["tripletas"]:
+    #     s = gb.quicksum(lit(r, sg) for r, sg in lits)
+    #     m.addConstr(s >= 1)
+    #     m.addConstr(s <= 2)
+    
     m = gb.Model(nombre)
     raices = sorted(datos["raices"])
     beta = m.addVars(raices, vtype=gb.GRB.BINARY, name="b")
@@ -301,10 +314,15 @@ def construye_reducido(datos, nombre="componente", minimizar=False,
     def lit(r, s):
         return beta[r] if s == 0 else 1 - beta[r]
 
-    for lits in datos["tripletas"]:
-        s = gb.quicksum(lit(r, sg) for r, sg in lits)
-        m.addConstr(s >= 1)
-        m.addConstr(s <= 2)
+    if lazy:
+        m._beta = beta
+        m._tripletas = datos["tripletas"]
+        m._n_lazy = 0
+    else:
+        for lits in datos["tripletas"]:
+            s = gb.quicksum(lit(r, sg) for r, sg in lits)
+            m.addConstr(s >= 1)
+            m.addConstr(s <= 2)
 
     # for lits in datos["paridades"]:
     #     n = len(lits)
@@ -325,6 +343,11 @@ def construye_reducido(datos, nombre="componente", minimizar=False,
         m.setObjective(
             gb.quicksum(c * beta[r] for r, c in datos["terminos"].items()),
             gb.GRB.MINIMIZE)
+        
+    for coefs, const in datos.get("maekawa", []):
+        s = m.addVar(vtype=gb.GRB.BINARY)
+        suma = gb.quicksum(c * (2 * beta[r] - 1) for r, c in coefs.items())
+        m.addConstr(suma + const == 4 * s - 2)
 
     m.update()
     return m, beta
@@ -334,23 +357,109 @@ def construye_reducido(datos, nombre="componente", minimizar=False,
 
 # def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
 #                              limite_pool=10**7, tiempo=None, silencioso=True):
+# def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
+#                              limite_pool=10**7, tiempo=None, silencioso=True,
+#                              presolve_gurobi=-1, facetas=False):
+#     """
+#     Input:  datos_comps — lista de reparte_por_componentes()
+#             constante — el término independiente de energia_reducida()
+#             modo — "factibilidad" | "recuento" | "optimizacion"
+#     Output: según el modo:
+#             factibilidad  -> (bool, valores)
+#             recuento      -> (n_estados, None)
+#             optimizacion  -> (valor_optimo, valores)
+#             donde valores es {raiz: 0 o 1}, o None si no procede.
+
+#     Cada componente se resuelve por separado. Los recuentos se MULTIPLICAN
+#     y los óptimos se SUMAN. Una componente sin restricciones es una
+#     variable libre: factible, dos estados, óptimo cero.
+#     """
+#     total_estados = 1
+#     total_valor = constante
+#     valores = {}
+#     total_nodes = 0
+
+#     for k, datos in enumerate(datos_comps):
+#         m, beta = construye_reducido(datos, f"comp{k}",
+#                                      minimizar=(modo == "optimizacion"),
+#                                      facetas=facetas)
+#         if silencioso:
+#             m.Params.OutputFlag = 0
+#         if tiempo is not None:
+#             m.Params.TimeLimit = tiempo
+#         m.Params.IntegralityFocus = 1
+#         m.Params.MIPGap = 0
+#         m.Params.Presolve = presolve_gurobi      # <- nueva
+
+#         if modo == "recuento":
+#             m.Params.PoolSearchMode = 2
+#             m.Params.PoolSolutions = limite_pool
+#             m.optimize()
+#             total_nodes += m.NodeCount
+#             if m.SolCount == 0:
+#                 return 0, None
+#             if m.SolCount >= limite_pool:
+#                 raise RuntimeError(
+#                     f"componente {k}: el pool se llenó ({limite_pool})")
+#             total_estados *= m.SolCount
+#             continue
+
+#         if modo == "factibilidad":
+#             m.Params.SolutionLimit = 1
+
+#         m.optimize()
+#         # if m.SolCount == 0:
+#         #     return (False, None) if modo == "factibilidad" else (None, None)
+#         total_nodes += m.NodeCount
+        
+#         if m.SolCount == 0:
+#             return (False, None, total_nodes) if modo == "factibilidad" \
+#                    else (None, None, total_nodes)
+
+#         valores.update({r: int(round(v.X)) for r, v in beta.items()})
+#         if modo == "optimizacion":
+#             total_valor += m.ObjVal
+
+#     if modo == "recuento":
+#         # return total_estados, None
+#         return total_estados, None, total_nodes
+#     if modo == "factibilidad":
+#         # return True, valores
+#         return True, valores, total_nodes
+#     # return total_valor, valores
+#     return total_valor, valores, total_nodes
+
+
+
+
+
 def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
                              limite_pool=10**7, tiempo=None, silencioso=True,
-                             presolve_gurobi=-1, facetas=False):
+                             presolve_gurobi=-1, facetas=False, lazy=False):
     """
     Input:  datos_comps — lista de reparte_por_componentes()
             constante — el término independiente de energia_reducida()
             modo — "factibilidad" | "recuento" | "optimizacion"
+            lazy — separa la transitividad por callback en cada componente
     Output: según el modo:
-            factibilidad  -> (bool, valores)
-            recuento      -> (n_estados, None)
-            optimizacion  -> (valor_optimo, valores)
+            factibilidad  -> (bool, valores, nodos)
+            recuento      -> (n_estados, None, nodos)
+            optimizacion  -> (valor_optimo, valores, nodos)
             donde valores es {raiz: 0 o 1}, o None si no procede.
 
     Cada componente se resuelve por separado. Los recuentos se MULTIPLICAN
     y los óptimos se SUMAN. Una componente sin restricciones es una
     variable libre: factible, dos estados, óptimo cero.
+
+    Con lazy no se puede usar el modo recuento: el solution pool devuelve
+    soluciones que pueden violar restricciones aún no separadas, de modo
+    que el número sería silenciosamente incorrecto.
     """
+    if lazy and modo == "recuento":
+        raise ValueError(
+            "el solution pool no es fiable con restricciones perezosas: "
+            "puede contar soluciones que violan tripletas no separadas")
+
     total_estados = 1
     total_valor = constante
     valores = {}
@@ -359,14 +468,16 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
     for k, datos in enumerate(datos_comps):
         m, beta = construye_reducido(datos, f"comp{k}",
                                      minimizar=(modo == "optimizacion"),
-                                     facetas=facetas)
+                                     facetas=facetas, lazy=lazy)
         if silencioso:
             m.Params.OutputFlag = 0
         if tiempo is not None:
             m.Params.TimeLimit = tiempo
         m.Params.IntegralityFocus = 1
         m.Params.MIPGap = 0
-        m.Params.Presolve = presolve_gurobi      # <- nueva
+        m.Params.Presolve = presolve_gurobi
+        if lazy:
+            m.Params.LazyConstraints = 1
 
         if modo == "recuento":
             m.Params.PoolSearchMode = 2
@@ -374,7 +485,7 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
             m.optimize()
             total_nodes += m.NodeCount
             if m.SolCount == 0:
-                return 0, None
+                return 0, None, total_nodes
             if m.SolCount >= limite_pool:
                 raise RuntimeError(
                     f"componente {k}: el pool se llenó ({limite_pool})")
@@ -384,27 +495,30 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
         if modo == "factibilidad":
             m.Params.SolutionLimit = 1
 
-        m.optimize()
-        # if m.SolCount == 0:
-        #     return (False, None) if modo == "factibilidad" else (None, None)
+        m.optimize(callback_lazy_beta) if lazy else m.optimize()
         total_nodes += m.NodeCount
-        
+
         if m.SolCount == 0:
             return (False, None, total_nodes) if modo == "factibilidad" \
                    else (None, None, total_nodes)
-
         valores.update({r: int(round(v.X)) for r, v in beta.items()})
         if modo == "optimizacion":
             total_valor += m.ObjVal
 
     if modo == "recuento":
-        # return total_estados, None
         return total_estados, None, total_nodes
     if modo == "factibilidad":
-        # return True, valores
         return True, valores, total_nodes
-    # return total_valor, valores
     return total_valor, valores, total_nodes
+
+
+
+
+
+
+
+
+
 
 
 
@@ -483,6 +597,26 @@ def separa_tripletas(valores, tripletas, tol=1e-6):
         if s < 1 - tol or s > 2 + tol:
             violadas.append((f, g, h))
     return violadas
+
+def separa_tripletas_beta(valores, tripletas, tol=1e-6):
+    """
+    Input:  valores — {raiz: valor} de la solución candidata
+            tripletas — [[(raiz, signo) x3]], ya reescritas sobre raíces
+    Output: la lista de tripletas violadas.
+
+    Variante de separa_tripletas para el modelo reducido. Aquí los
+    literales ya llevan su signo, de modo que no hay que traducir pares
+    de caras: el valor del literal es beta_r si el signo es 0, y su
+    complemento si es 1.
+    """
+    violadas = []
+    for lits in tripletas:
+        s = sum(valores[r] if sg == 0 else 1 - valores[r]
+                for r, sg in lits)
+        if s < 1 - tol or s > 2 + tol:
+            violadas.append(lits)
+    return violadas
+
         
 
 def callback_lazy(m, where):
@@ -509,6 +643,29 @@ def callback_lazy(m, where):
 
     for f, g, h in separa_tripletas(valores, m._tripletas):
         s = (literal(m._x, f, g) + literal(m._x, g, h) + literal(m._x, h, f))
+        m.cbLazy(s >= 1)
+        m.cbLazy(s <= 2)
+        m._n_lazy += 2
+        
+        
+def callback_lazy_beta(m, where):
+    """
+    Separación de la transitividad sobre el modelo reducido.
+
+    Requiere que el modelo lleve colgados m._beta, m._tripletas (ya
+    reescritas sobre raíces) y m._n_lazy, y que se haya puesto
+    m.Params.LazyConstraints = 1.
+    """
+    if where != gb.GRB.Callback.MIPSOL:
+        return
+
+    raices = list(m._beta.keys())
+    vals = m.cbGetSolution([m._beta[r] for r in raices])
+    valores = dict(zip(raices, vals))
+
+    for lits in separa_tripletas_beta(valores, m._tripletas):
+        s = gb.quicksum(m._beta[r] if sg == 0 else 1 - m._beta[r]
+                        for r, sg in lits)
         m.cbLazy(s >= 1)
         m.cbLazy(s <= 2)
         m._n_lazy += 2
