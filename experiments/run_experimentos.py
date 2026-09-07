@@ -551,6 +551,7 @@ def resuelve_con_config(a, config, semilla):
     m.Params.OutputFlag = 0
     m.Params.IntegralityFocus = 1
     m.Params.MIPGap = 0
+    m.Params.Threads = 1
     m.Params.TimeLimit = limite
     m.Params.Presolve = config.get("presolve_gurobi", -1)
     if semilla is not None:
