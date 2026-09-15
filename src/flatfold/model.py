@@ -437,12 +437,20 @@ def construye_reducido(datos, nombre="componente", minimizar=False,
 def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
                              limite_pool=10**7, tiempo=None, silencioso=True,
                              presolve_gurobi=-1, facetas=False, lazy=False,
-                             semilla=None):
+                             semilla=None, lazy_constraints=False,
+                             hilos=1):
     """
     Input:  datos_comps — lista de reparte_por_componentes()
             constante — el término independiente de energia_reducida()
             modo — "factibilidad" | "recuento" | "optimizacion"
             lazy — separa la transitividad por callback en cada componente
+            lazy_constraints — pone el parámetro de Gurobi SIN separar.
+                Sirve para aislar su efecto: activarlo hace que Gurobi
+                desactive reducciones de su presolve, de modo que
+                comparar lazy contra estática mezcla dos cosas. Con esta
+                celda intermedia se separan.
+            hilos — debe coincidir con el del camino sin presolve, o los
+                tiempos no son comparables.
     Output: según el modo:
             factibilidad  -> (bool, valores, nodos)
             recuento      -> (n_estados, None, nodos)
@@ -452,6 +460,10 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
     Cada componente se resuelve por separado. Los recuentos se MULTIPLICAN
     y los óptimos se SUMAN. Una componente sin restricciones es una
     variable libre: factible, dos estados, óptimo cero.
+
+    El límite de tiempo es GLOBAL: a cada componente se le da lo que queda
+    del presupuesto, de modo que el tiempo total queda acotado igual que
+    en el camino sin presolve y la comparación es justa.
 
     Con lazy no se puede usar el modo recuento: el solution pool devuelve
     soluciones que pueden violar restricciones aún no separadas, de modo
@@ -485,8 +497,9 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
             m.Params.TimeLimit = restante
         m.Params.IntegralityFocus = 1
         m.Params.MIPGap = 0
+        m.Params.Threads = hilos
         m.Params.Presolve = presolve_gurobi
-        if lazy:
+        if lazy or lazy_constraints:
             m.Params.LazyConstraints = 1
 
         if modo == "recuento":
@@ -505,7 +518,10 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
         if modo == "factibilidad":
             m.Params.SolutionLimit = 1
 
-        m.optimize(callback_lazy_beta) if lazy else m.optimize()
+        if lazy:
+            m.optimize(callback_lazy_beta)
+        else:
+            m.optimize()
         total_nodes += m.NodeCount
 
         if m.SolCount == 0:
@@ -520,9 +536,6 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
     if modo == "factibilidad":
         return True, valores, total_nodes
     return total_valor, valores, total_nodes
-
-
-
 
 
 
