@@ -11,5 +11,5 @@
 cd $PBS_O_WORKDIR
 module load python/3.12.8 gurobi/12.0.3
 
-LINEA=$(sed -n "${PBS_ARRAY_INDEX}p" experiments/jobs.txt)
+LINEA=$(sed -n "${PBS_ARRAY_INDEX}p" ${JOBS:-experiments/jobs.txt})
 python3 -O experiments/run_experimentos.py $LINEA
