@@ -450,7 +450,8 @@ def resuelve_con_config(a, config, semilla):
     Los tiempos se miden abarcando las mismas fases en ambos caminos:
     t_presolve más t_construccion cubren hasta justo antes de optimizar,
     y t_optimize solo la resolución. Medirlos de otro modo en una rama
-    invalidaría cualquier comparación.
+    invalidaría cualquier comparación. Por la misma razón, el número de
+    hilos es el mismo en los dos.
 
     Casos: factibilidad, prescrita, parcial, optimizacion.
     """
@@ -461,6 +462,7 @@ def resuelve_con_config(a, config, semilla):
 
     modo = config.get("caso", "factibilidad")
     limite = config.get("tiempo_limite", 300)
+    hilos = config.get("hilos", 1)
 
     etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
     orig = etiquetas_por_pliegue_original(etiq, a.representantes)
@@ -527,7 +529,8 @@ def resuelve_con_config(a, config, semilla):
             presolve_gurobi=config.get("presolve_gurobi", -1),
             facetas=config.get("facetas", False),
             lazy=config.get("lazy", False),
-            semilla=semilla)
+            lazy_constraints=config.get("lazy_constraints", False),
+            semilla=semilla, hilos=hilos)
         r["t_optimize"] = round(time.perf_counter() - t, 3)
         r["nodos"] = int(nodos)
 
@@ -551,9 +554,13 @@ def resuelve_con_config(a, config, semilla):
     m.Params.OutputFlag = 0
     m.Params.IntegralityFocus = 1
     m.Params.MIPGap = 0
-    m.Params.Threads = 1
+    m.Params.Threads = hilos
     m.Params.TimeLimit = limite
     m.Params.Presolve = config.get("presolve_gurobi", -1)
+    # el parámetro sin la separación: aísla el efecto que tiene sobre el
+    # presolve de Gurobi, que desactiva reducciones al activarlo
+    if config.get("lazy_constraints"):
+        m.Params.LazyConstraints = 1
     if semilla is not None:
         m.Params.Seed = semilla
 
@@ -587,7 +594,6 @@ def resuelve_con_config(a, config, semilla):
     else:
         r["estado"] = "sin_resolver"
     return r
-
 
 
 
