@@ -3,6 +3,7 @@ import gurobipy as gb
 from dataclasses import dataclass
 from collections import defaultdict
 from itertools import combinations
+import time
 from flatfold.incidences import cruces, tripletas, colineales, pares_comparables
 
 from flatfold.io_fold import read_fold
@@ -465,6 +466,7 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
     total_valor = constante
     valores = {}
     total_nodes = 0
+    t_inicio = time.perf_counter()
 
     for k, datos in enumerate(datos_comps):
         m, beta = construye_reducido(datos, f"comp{k}",
@@ -475,7 +477,12 @@ def resuelve_por_componentes(datos_comps, constante=0, modo="factibilidad",
         if silencioso:
             m.Params.OutputFlag = 0
         if tiempo is not None:
-            m.Params.TimeLimit = tiempo
+            restante = tiempo - (time.perf_counter() - t_inicio)
+            if restante <= 0:
+                return ((False, None, total_nodes) if modo == "factibilidad"
+                        else (0 if modo == "recuento" else None,
+                              None, total_nodes))
+            m.Params.TimeLimit = restante
         m.Params.IntegralityFocus = 1
         m.Params.MIPGap = 0
         m.Params.Presolve = presolve_gurobi

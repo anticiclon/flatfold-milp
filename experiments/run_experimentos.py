@@ -532,7 +532,7 @@ def resuelve_con_config(a, config, semilla):
         r["nodos"] = int(nodos)
 
         if valor is None or valor is False:
-            r["estado"] = "sin_solucion"
+            r["estado"] = "sin_resolver"
         else:
             r["estado"] = "ok"
             if modo_solver == "optimizacion":
