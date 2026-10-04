@@ -237,13 +237,6 @@ def test_separa_tolera_flotantes():
     valores = {(0, 1): 0.9999999, (1, 2): 1.0, (0, 2): 1e-9}
     assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
     
-    
-def test_separa_detecta_el_ciclo():
-    """f encima de g, g encima de h, h encima de f: imposible."""
-    valores = {(0, 1): 1, (1, 2): 1, (0, 2): 0}
-    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
-
-
 def test_separa_detecta_el_ciclo_inverso():
     valores = {(0, 1): 0, (1, 2): 0, (0, 2): 1}
     assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
@@ -258,12 +251,6 @@ def test_separa_acepta_los_ordenes_totales():
         if separa_tripletas(valores, [(0, 1, 2)]):
             n_violadas += 1
     assert n_violadas == 2          # los dos ciclos
-
-
-def test_separa_tolera_flotantes():
-    valores = {(0, 1): 0.9999999, (1, 2): 1.0, (0, 2): 1e-9}
-    assert separa_tripletas(valores, [(0, 1, 2)]) == [(0, 1, 2)]
-
 
 def test_separa_lista_vacia():
     assert separa_tripletas({}, []) == []
