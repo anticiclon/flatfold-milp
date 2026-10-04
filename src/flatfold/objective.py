@@ -4,10 +4,11 @@ Created on Wed Sep  2 11:16:30 2026
 
 @author: Trabajador
 """
+import gurobipy as gb
 
 from flatfold.exact import sigma
 from flatfold.io_fold import Kind
-from flatfold.model import literal, analiza_completo
+from flatfold.model import literal, construye_modelo, añade_restricciones
 from flatfold.pattern import vecinos_ordenados, aristas_caras
 from flatfold.validate import (vertices_interiores, sectores,
                                    minimos_locales)
@@ -289,4 +290,86 @@ def comprueba_trozos_coinciden(valores, etiquetas, origen):
     if malos:
         raise ValueError(f"trozos con etiquetas distintas: {malos}")
         
+
+
+def cuenta_montes(x, etiquetas):
+    """
+    Input:  x — las variables de capa
+            etiquetas — {arista: (par, signo)}, de etiquetas_mv o de
+                        etiquetas_por_pliegue_original
+    Output: expresión lineal: cuántos pliegues resultan monte.
+
+    Cada m_e es un literal sobre una variable de capa, de modo que su
+    suma es lineal en x. Con ella se prescribe el número de montes,
+    sum = M, o se acota, y el número de valles es el complemento:
+    len(etiquetas) menos esta suma.
+
+    El recuento abarca los pliegues presentes en el diccionario recibido,
+    de modo que la elección de cuáles entran la hace quien lo construye.
+    """
+    return gb.quicksum(
+        literal(x, u, v) if s == 0 else 1 - literal(x, u, v)
+        for (u, v), s in etiquetas.values())
+
+def distancia_hamming(x, etiquetas, m0):
+    """
+    Número de pliegues en que la asignación inducida difiere de m0.
+
+    Coincide con la energía de pesos unitarios respecto de m0, y se
+    implementa llamándola: la aritmética de signos que traduce el orden
+    de capas a etiquetas es delicada y conviene que exista en un solo
+    sitio.
+    """
+    return energia(x, etiquetas, m0)
+
+
+
+
+def enumera_asignaciones(a, limite=1000, tiempo=None):
+    """
+    Input:  a — el Analisis;  limite — tope de asignaciones a devolver.
+    Output: (asignaciones, agotado) donde asignaciones es una lista de
+            {arista_del_fichero: 0 o 1} y agotado dice si se encontraron
+            todas o se alcanzó el límite.
+
+    Enumera las asignaciones monte/valle DISTINTAS que el patrón admite,
+    no los órdenes de capas. Son cosas diferentes: un mismo etiquetado
+    puede realizarse por varios apilamientos, de modo que el número de
+    asignaciones es en general menor que el de estados plegados, y es el
+    que responde a la pregunta de cuántas formas hay de plegar el patrón.
+
+    El procedimiento resuelve repetidamente, añadiendo tras cada solución
+    la condición de que la siguiente diste al menos uno de ella. La
+    distancia es la de Hamming sobre los pliegues del fichero, lineal en
+    las variables de capa, de modo que cada corte es una sola fila.
+    """
+
+    m, x = construye_modelo(a.pares)
+    ind = {p: i for i, p in enumerate(a.pares)}
+    añade_restricciones(m, x, ind, a.trip, a.cr + a.cr_oo, a.tt,
+                        a.tto, a.oo)
+    m.Params.OutputFlag = 0
+    m.Params.SolutionLimit = 1
+    if tiempo is not None:
+        m.Params.TimeLimit = tiempo
+
+    etiq = etiquetas_mv(a.G, a.fi, a.iso, a.dic_aristas, a.idx_ext)
+    orig = etiquetas_por_pliegue_original(etiq, a.representantes)
+
+    salida = []
+    while len(salida) < limite:
+        m.optimize()
+        if m.SolCount == 0:
+            return salida, True              # no quedan más
+
+        asignacion = {}
+        for arista, ((u, v), s) in orig.items():
+            valor = int(round(x[u, v].X))
+            asignacion[arista] = valor ^ s
+        salida.append(asignacion)
+
+        # la siguiente debe diferir en al menos un pliegue
+        m.addConstr(distancia_hamming(x, orig, asignacion) >= 1)
+
+    return salida, False                     # se alcanzó el límite
         

@@ -820,6 +820,79 @@ def analiza_completo(ruta, subdividir=True):
                     pares, trip, cr, cr_oo, tt, tto, oo, origen, rep,
                     subdividido)
 
+
+
+def profundidad(x, pares, f):
+    """
+    Input:  x — las variables de capa, indexadas por par de caras
+            pares — lista de (u,v) con u < v
+            f — una cara
+    Output: expresión lineal: cuántas caras quedan por encima de f.
+
+    Es la suma de los literales X_gf sobre las caras g que se solapan con
+    f, de modo que vale 0 cuando f está en la superficie del montón y
+    tantas como caras la cubran cuando está en el fondo.
+
+    Lineal en x, así que sirve tanto de objetivo como de lado de una
+    restricción.
+    """
+    vecinas = [v if u == f else u for u, v in pares if f in (u, v)]
+    return gb.quicksum(literal(x, g, f) for g in vecinas)
+
+
+
+def añade_en_superficie(m, x, pares, f):
+    """
+    Input:  el modelo, las variables, la lista de pares y una cara.
+    Output: el número de restricciones añadidas.
+
+    Obliga a que ninguna cara quede por encima de f, es decir, a que f
+    sea visible en el estado plegado. Se imponen las igualdades X_gf = 0
+    una a una en lugar de pedir que su suma sea nula: ambas describen el
+    mismo conjunto, pero las igualdades individuales fijan variables y el
+    solver las elimina en su presolve, mientras que la suma deja una fila
+    con tantos términos como caras solapen.
+
+    Si f no se solapa con ninguna otra cara, ya está en la superficie y no
+    hay nada que imponer.
+    """
+    n = 0
+    for u, v in pares:
+        if f not in (u, v):
+            continue
+        g = v if u == f else u
+        m.addConstr(literal(x, g, f) == 0)
+        n += 1
+    return n
+
+
+def añade_profundidad_maxima(m, x, pares, caras):
+    """
+    Input:  el modelo, las variables, la lista de pares y un conjunto de
+            caras.
+    Output: la variable t que acota la profundidad de todas ellas.
+
+    Introduce t con t >= profundidad(f) para cada f del conjunto, de modo
+    que t es una cota superior de cuántas caras quedan por encima de la
+    más enterrada. Minimizar t pide el estado plegado en que la región
+    entera queda lo más expuesta posible.
+
+    La variable es entera: la profundidad es un recuento, y declararla
+    entera da una relajación más ajustada que dejarla continua.
+
+    Quien llama decide qué hacer con t; esta función no fija el objetivo.
+    """
+    caras = list(caras)
+    if not caras:
+        raise ValueError("el conjunto de caras está vacío")
+
+    tope = max(sum(1 for u, v in pares if f in (u, v)) for f in caras)
+    t = m.addVar(vtype=gb.GRB.INTEGER, lb=0, ub=tope, name="t_prof")
+    for f in caras:
+        m.addConstr(t >= profundidad(x, pares, f))
+    return t
+
+
 # def main():
 #     from pathlib import Path
 #     import gurobipy as gb
