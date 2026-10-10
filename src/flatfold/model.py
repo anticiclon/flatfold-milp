@@ -893,6 +893,48 @@ def añade_profundidad_maxima(m, x, pares, caras):
     return t
 
 
+def añade_caras_intermedias(m, x, pares, caras, idx_ext, f, g):
+    """
+    Input:  m — el modelo;  x — las variables indexadas por par;
+            pares — la lista de pares solapados;  caras — la lista de caras;
+            idx_ext — el índice de la cara exterior;  f, g — dos caras
+            que deben solaparse entre sí.
+    Output: (N_fg, {t: y_t}) con N_fg expresión lineal.
+
+    Cuenta las caras que quedan estrictamente entre f y g, es decir, el
+    grosor del paquete que las separa sobre la región que ambas cubren.
+    Una cara t está entre ellas exactamente cuando X_ft != X_gt, que no
+    es lineal; por cada t candidata se introduce una binaria y_t acotada
+    por las cuatro desigualdades que la fijan al XOR. No fija objetivo:
+    quien llame decide si minimizar, maximizar o acotar.
+    """
+    conjunto = {(min(u, v), max(u, v)) for u, v in pares}
+
+    def solapan(u, v):
+        return (min(u, v), max(u, v)) in conjunto
+
+    if not solapan(f, g):
+        raise ValueError(
+            f"las caras {f} y {g} no se solapan: no cubren ninguna región "
+            f"común y el grosor entre ellas no está definido")
+
+    candidatas = [t for t in range(len(caras))
+                  if t != idx_ext and t not in (f, g)
+                  and solapan(f, t) and solapan(g, t)]
+
+    y = {}
+    for t in candidatas:
+        a, b = literal(x, f, t), literal(x, g, t)
+        yt = m.addVar(vtype=gb.GRB.BINARY, name=f"y_{f}_{g}_{t}")
+        m.addConstr(yt >= a - b)
+        m.addConstr(yt >= b - a)
+        m.addConstr(yt <= a + b)
+        m.addConstr(yt <= 2 - a - b)
+        y[t] = yt
+
+    return gb.quicksum(y.values()), y
+
+
 # def main():
 #     from pathlib import Path
 #     import gurobipy as gb

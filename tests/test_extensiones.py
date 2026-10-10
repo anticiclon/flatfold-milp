@@ -2,7 +2,8 @@
 """
 Tests de los objetivos y restricciones adicionales: profundidad de una
 cara, exposición en superficie, cota de profundidad de una región,
-recuento de montes, distancia de Hamming y enumeración de asignaciones.
+caras intermedias entre dos caras, recuento de montes, distancia de
+Hamming y enumeración de asignaciones.
 
 Todas estas cantidades son lineales en las variables de capa y no alteran
 la estructura del programa, de modo que lo que hay que comprobar es que
@@ -15,7 +16,8 @@ from pathlib import Path
 import gurobipy as gb
 from flatfold.model import (analiza_completo, construye_modelo,
                             añade_restricciones, profundidad,
-                            añade_en_superficie, añade_profundidad_maxima)
+                            añade_en_superficie, añade_profundidad_maxima,
+                            literal, añade_caras_intermedias)
 from flatfold.objective import (etiquetas_mv, etiquetas_por_pliegue_original,
                                 energia, cuenta_montes, distancia_hamming,
                                 enumera_asignaciones)
@@ -304,3 +306,146 @@ def test_el_limite_se_respeta():
     asigs, agotado = enumera_asignaciones(a, limite=3)
     assert len(asigs) == 3
     assert not agotado
+    
+# ===== caras intermedias ===================================================
+
+def modelo_sintetico(pares):
+    """Modelo con solo las variables de capa, sin ninguna familia.
+
+    Las caras intermedias no dependen de la geometría, sino de qué pares
+    existen y de qué valen sus literales, de modo que estos tests fijan
+    los literales a mano sobre configuraciones inventadas. Así se recorre
+    la tabla de verdad completa, que ninguna instancia real garantiza
+    visitar.
+    """
+    m, x = construye_modelo(pares)
+    m.Params.OutputFlag = 0
+    return m, x
+
+
+def pares_completos(n):
+    """Todas las caras de 0..n-1 solapan entre sí."""
+    return [(u, v) for u in range(n) for v in range(u + 1, n)]
+
+
+@pytest.mark.parametrize("v_ft,v_gt,esperado", [(0, 0, 0), (1, 0, 1),
+                                                (0, 1, 1), (1, 1, 0)])
+def test_caras_intermedias_es_el_xor(v_ft, v_gt, esperado):
+    """Las cuatro desigualdades fijan y_t al XOR en los cuatro casos.
+
+    Se resuelve dos veces, minimizando y maximizando: si solo se
+    minimizara, una y_t meramente acotada por abajo pasaría el test
+    igual, y no se comprobaría que las dos cotas superiores actúan.
+    Exigiendo que ambos sentidos coincidan se confirma que y_t queda
+    determinada y no solo acotada.
+    """
+    caras = list(range(3))
+    pares = pares_completos(3)
+    f, g, t = 0, 1, 2
+
+    for sentido in (gb.GRB.MINIMIZE, gb.GRB.MAXIMIZE):
+        m, x = modelo_sintetico(pares)
+        N, y = añade_caras_intermedias(m, x, pares, caras, None, f, g)
+        m.addConstr(literal(x, f, t) == v_ft)
+        m.addConstr(literal(x, g, t) == v_gt)
+        m.setObjective(N, sentido)
+        m.optimize()
+        assert m.Status == gb.GRB.OPTIMAL
+        assert round(y[t].X) == esperado
+        assert round(N.getValue()) == esperado
+
+
+def test_caras_intermedias_sin_candidatas_vale_cero():
+    """Si ninguna cara solapa con f y con g a la vez, N_fg es la
+    constante 0: no hay nada capaz de intercalarse."""
+    caras = list(range(4))
+    pares = [(0, 1), (0, 2), (1, 3)]      # 2 solo con 0; 3 solo con 1
+    m, x = modelo_sintetico(pares)
+    N, y = añade_caras_intermedias(m, x, pares, caras, None, 0, 1)
+    assert y == {}
+    assert N.getValue() == 0
+
+
+def test_caras_intermedias_exige_que_f_y_g_se_solapen():
+    """Sin región común no hay grosor que medir."""
+    caras = list(range(3))
+    pares = [(0, 2), (1, 2)]              # 0 y 1 no solapan entre sí
+    m, x = modelo_sintetico(pares)
+    with pytest.raises(ValueError):
+        añade_caras_intermedias(m, x, pares, caras, None, 0, 1)
+
+
+def test_caras_intermedias_excluye_la_cara_exterior():
+    """La cara exterior está en caras pero no es una capa del plegado."""
+    caras = list(range(4))
+    pares = pares_completos(4)
+    m, x = modelo_sintetico(pares)
+    _, y = añade_caras_intermedias(m, x, pares, caras, 3, 0, 1)
+    assert set(y) == {2}
+
+
+@pytest.mark.parametrize("v2,v3,esperado", [((0, 0), (0, 0), 0),
+                                            ((1, 0), (0, 0), 1),
+                                            ((1, 0), (1, 0), 2),
+                                            ((1, 1), (0, 1), 1)])
+def test_caras_intermedias_cuenta_varias(v2, v3, esperado):
+    """Con dos candidatas, N_fg recorre 0, 1 y 2 según los literales."""
+    caras = list(range(4))
+    pares = pares_completos(4)
+    f, g = 0, 1
+    m, x = modelo_sintetico(pares)
+    N, _ = añade_caras_intermedias(m, x, pares, caras, None, f, g)
+    m.addConstr(literal(x, f, 2) == v2[0])
+    m.addConstr(literal(x, g, 2) == v2[1])
+    m.addConstr(literal(x, f, 3) == v3[0])
+    m.addConstr(literal(x, g, 3) == v3[1])
+    m.setObjective(N, gb.GRB.MINIMIZE)
+    m.optimize()
+    assert m.Status == gb.GRB.OPTIMAL
+    assert round(N.getValue()) == esperado
+
+
+def test_caras_intermedias_sobre_instancia_real():
+    """Sobre un estado válido de la bomba de agua, N_fg debe coincidir
+    con el recuento hecho leyendo las variables."""
+    a, m, x = modelo(TOY / "waterbomb4.fold")
+    f, g = a.pares[0]
+    N, y = añade_caras_intermedias(m, x, a.pares, list(a.plegadas),
+                                   a.idx_ext, f, g)
+    m.optimize()
+    assert m.SolCount > 0
+
+    vals = {par: int(round(v.X)) for par, v in x.items()}
+
+    def X(u, v):
+        return vals[(u, v)] if u < v else 1 - vals[(v, u)]
+
+    a_mano = sum(1 for t in y if X(f, t) != X(g, t))
+    assert round(N.getValue()) == a_mano
+
+
+def test_caras_intermedias_coincide_con_la_diferencia_de_profundidades():
+    """En la bomba de agua las cuatro caras se apilan sobre el mismo
+    triángulo, de modo que entre dos de ellas quedan exactamente las
+    que su diferencia de profundidades indica."""
+    a, m, x = modelo(TOY / "waterbomb4.fold")
+    f, g = a.pares[0]
+    N, _ = añade_caras_intermedias(m, x, a.pares, list(a.plegadas),
+                                   a.idx_ext, f, g)
+    m.optimize()
+    df = round(profundidad(x, a.pares, f).getValue())
+    dg = round(profundidad(x, a.pares, g).getValue())
+    assert round(N.getValue()) == abs(df - dg) - 1
+
+
+def test_caras_intermedias_acota_el_grosor():
+    """Uso previsto: N_fg <= k como cota de grosor."""
+    a, m, x = modelo(TOY / "waterbomb4.fold")
+    f, g = a.pares[0]
+    N, _ = añade_caras_intermedias(m, x, a.pares, list(a.plegadas),
+                                   a.idx_ext, f, g)
+    m.addConstr(N == 0)
+    m.setObjective(N, gb.GRB.MAXIMIZE)
+    m.optimize()
+    assert m.SolCount > 0, "f y g deben poder quedar contiguas"
+    assert round(N.getValue()) == 0
