@@ -228,24 +228,6 @@ def colineales(G, caras, plegadas, iso, dic_aristas, idx_exterior):
 
 
 
-def sigma(isometria):
-    """
-    Input:  una isometría (A, t).
-    Output: +1 si conserva la orientación, -1 si la invierte.
-
-    Es el determinante de la parte lineal. Con A ortogonal solo puede
-    valer +1 o -1: +1 son giros y traslaciones, -1 reflexiones.
-
-    En el plegado equivale a la paridad del número de pliegues cruzados
-    desde la cara de referencia, y dice si la cara quedó del derecho o
-    del revés. De ahí sale la etiqueta monte/valle.
-    """
-    (a, b, c, d), _ = isometria
-    det = a * d - b * c
-    assert det in (1, -1), f"parte lineal no ortogonal: {isometria}"
-    return det
-
-
 
 
 

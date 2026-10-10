@@ -4,8 +4,7 @@ import pytest
 from flatfold.exact import (pendiente_admisible, reflexion, aplica_isometria,
                             compon_isometrias, es_identidad, 
                             normaliza_a_reticula)
-from flatfold.incidences import sigma
-
+from flatfold.exact import sigma
 
 def test_pendientes_admisibles():
     assert pendiente_admisible((0,0), (4,0))     # horizontal

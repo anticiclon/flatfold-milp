@@ -278,9 +278,11 @@ def orden_de_capas(pares, valores):
 #     return pares, trip, cr, tt, tto, oo
 
 def analiza(ruta, subdividir=True):
-    """Compatibilidad: solo las seis listas."""
+    """Compatibilidad: solo las seis listas, con los cruces de las dos
+    clases concatenados en una sola."""
     a = analiza_completo(ruta, subdividir)
-    return a.pares, a.trip, a.cr, a.tt, a.tto, a.oo
+
+    return a.pares, a.trip, a.cr + a.cr_oo, a.tt, a.tto, a.oo
 
 
 
